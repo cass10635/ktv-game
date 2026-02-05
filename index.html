@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>K-Pop 蒐集戰 V66</title>
+    <title>K-Pop 蒐集戰 V67</title>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-database-compat.js"></script>
     <style>
@@ -153,8 +153,8 @@
 </div>
 
 <div id="page-login" class="page active">
-    <h1 style="color:var(--accent);">K-Pop 蒐集戰 V66</h1>
-    <p style="color:#888; font-size:12px;">圖片路徑修復 • 智慧標籤 • 蒐集冊優化</p>
+    <h1 style="color:var(--accent);">K-Pop 蒐集戰 V67</h1>
+    <p style="color:#888; font-size:12px;">經典二代團 • 圖片路徑優化</p>
     <input type="text" id="inName" placeholder="你的暱稱" style="width:80%; padding:15px; background:#222; border:1px solid #444; color:white; border-radius:8px; margin-bottom:10px;">
     <input type="text" id="inRoom" placeholder="房間號碼" style="width:80%; padding:15px; background:#222; border:1px solid #444; color:white; border-radius:8px; margin-bottom:20px;">
     <button class="btn-main" onclick="initGame()">開始挑戰</button>
@@ -239,6 +239,7 @@
 
 <script>
 // ==================== 資料庫 ====================
+// V67 新增: 4minute, After School, f(x), KARA, Miss A, SISTAR, T-ara
 const GIRL_GROUPS = {
     "BLACKPINK": ["Jisoo", "Jennie", "Rosé", "Lisa"],
     "aespa": ["Karina", "Giselle", "Winter", "Ningning"],
@@ -268,6 +269,15 @@ const GIRL_GROUPS = {
     "CLC": ["Seunghee", "Yujin", "Seungyeon", "Sorn", "Yeeun", "Elkie", "Eunbin"],
     "AOA": ["Choa", "Jimin", "Yuna", "Hyejeong", "Mina", "Seolhyun", "Chanmi"],
     "2NE1": ["Bom", "Dara", "CL", "Minzy"],
+    // === 新增 V67 ===
+    "4minute": ["Jihyun", "Gayoon", "Jiyoon", "Hyuna", "Sohyun"],
+    "After School": ["Kahi", "Jungah", "Soyoung", "Juyeon", "Uee", "Bekah", "Raina", "Nana", "Lizzy", "E-Young", "Kaeun"],
+    "f(x)": ["Victoria", "Amber", "Luna", "Krystal", "Sulli"],
+    "KARA": ["Gyuri", "Seungyeon", "Hara", "Nicole", "Jiyoung", "Youngji"],
+    "Miss A": ["Fei", "Jia", "Min", "Suzy"],
+    "SISTAR": ["Hyolyn", "Bora", "Soyou", "Dasom"],
+    "T-ara": ["Boram", "Qri", "Soyeon", "Eunjung", "Hyomin", "Jiyeon"],
+    // ================
     "hearts2hearts": ["Member A", "Member B", "Member C", "Member D"], 
     "KiiiKii": ["Member 1", "Member 2", "Member 3", "Member 4"]
 };
@@ -297,8 +307,8 @@ function initGame() {
     myRoom = document.getElementById('inRoom').value.trim();
     if (!myName || !myRoom) return alert("請填寫資訊");
 
-    collection = JSON.parse(localStorage.getItem(`v66_col_${myName}`)) || {};
-    singers = JSON.parse(localStorage.getItem(`v66_sin_${myName}`)) || { m: [], f: [], g: [] };
+    collection = JSON.parse(localStorage.getItem(`v67_col_${myName}`)) || {};
+    singers = JSON.parse(localStorage.getItem(`v67_sin_${myName}`)) || { m: [], f: [], g: [] };
 
     document.getElementById('display-name').innerText = myName;
     document.getElementById('display-room').innerText = myRoom;
@@ -307,7 +317,6 @@ function initGame() {
     db.ref(`rooms/${myRoom}/players/${myName}`).update({ name: myName, lastActive: Date.now() });
     db.ref(`rooms/${myRoom}/players`).on('value', snap => updateRanking(snap.val()));
 
-    // 確保初始化時渲染
     renderCollection(); 
     showPage('page-home');
     syncData();
@@ -327,10 +336,10 @@ function syncData() {
     renderHomeSingers();
 
     db.ref(`rooms/${myRoom}/players/${myName}`).update({ completedGroups: comp, cardCount: Object.values(collection).reduce((a,b)=>a+b, 0) });
-    localStorage.setItem(`v66_col_${myName}`, JSON.stringify(collection));
-    localStorage.setItem(`v66_sin_${myName}`, JSON.stringify(singers));
+    localStorage.setItem(`v67_col_${myName}`, JSON.stringify(collection));
+    localStorage.setItem(`v67_sin_${myName}`, JSON.stringify(singers));
     
-    // 每次同步數據也刷新蒐集冊
+    // 同步刷新蒐集冊
     renderCollection();
 }
 
@@ -411,7 +420,7 @@ function goToSettlement() {
     showPage('page-settle');
 }
 
-// ==================== 歌手登錄結算 (V66 智慧標籤) ====================
+// ==================== 歌手登錄結算 (智慧標籤) ====================
 function addSingerInputRow() {
     const container = document.getElementById('singer-input-container');
     const rowId = Date.now() + Math.random().toString(36).substr(2, 5);
@@ -433,21 +442,17 @@ function addSingerInputRow() {
     renderAllHistoryTags(rowId);
 }
 
-// 顯示所有歷史標籤 (不再過濾，直接顯示並支援自動切換)
 function renderAllHistoryTags(rowId) {
     const container = document.getElementById(`tags-${rowId}`);
     container.innerHTML = "";
 
     const allTags = [];
-    // 收集所有標籤並標記類型
     singers.m.forEach(n => allTags.push({name:n, type:'m'}));
     singers.f.forEach(n => allTags.push({name:n, type:'f'}));
     singers.g.forEach(n => allTags.push({name:n, type:'g'}));
     
-    // 去重 (取最新的類型)
     const uniqueTags = [];
     const seen = new Set();
-    // 反向遍歷以保留最新，但這裡簡單用 Set 去重
     allTags.forEach(t => {
         if(!seen.has(t.name)) {
             uniqueTags.push(t);
@@ -455,12 +460,10 @@ function renderAllHistoryTags(rowId) {
         }
     });
 
-    // 只顯示前 20 個 (可根據需求調整)
     uniqueTags.slice(0, 20).forEach(tag => {
         const span = document.createElement('span');
         span.className = `quick-tag t-${tag.type}`;
         span.innerText = tag.name;
-        // 點擊：填入名字 + 自動切換類型
         span.onclick = () => {
             document.getElementById(`input-${rowId}`).value = tag.name;
             setRowType(rowId, tag.type);
@@ -495,18 +498,21 @@ function finalizeSettlement() {
     syncData();
 }
 
-// ==================== 圖片處理與蒐集冊 ====================
+// ==================== 圖片處理 (V67 優化版) ====================
 function getCardImage(group, member) {
-    // 替換空格為底線，符合一般檔案命名習慣
-    const safeGroup = group.replace(/ /g, '_');
+    // 檔名規則：
+    // 1. 移除特殊字元 (括號、星星等) => replace(/[\*\(\)]/g, '')
+    // 2. 空格轉底線 => replace(/ /g, '_')
+    // 範例: "f(x)" -> "fx", "IZ*ONE" -> "IZONE"
+    const safeGroup = group.replace(/ /g, '_').replace(/[\*\(\)]/g, '');
     const safeMember = member.replace(/ /g, '_');
-    // 相對路徑: ./images/團體_成員.jpg
+    
     return `./images/${safeGroup}_${safeMember}.jpg`;
 }
 
-// 圖片載入失敗時的預設圖
+// 圖片防呆
 function handleImgError(img, g, m) {
-    img.onerror = null; // 防止無限循環
+    img.onerror = null;
     img.src = `https://placehold.co/400x600/1e1e1e/FFF?text=${g}%0A${m}&font=roboto`;
 }
 
@@ -545,9 +551,10 @@ function drawCards(count, isEx = false) {
 
 function renderCollection() {
     const container = document.getElementById('collection-container');
-    if(!container) return; // 安全檢查
+    if(!container) return;
     container.innerHTML = "";
     
+    // 按照加入順序或名稱排序顯示
     for(let g in GIRL_GROUPS) {
         const isComp = GIRL_GROUPS[g].every(m => collection[`${g}_${m}`]);
         const sec = document.createElement('div');
@@ -585,7 +592,7 @@ function renderCollection() {
 function openCardView(group, member) {
     const img = document.getElementById('view-img');
     img.src = getCardImage(group, member);
-    img.onerror = () => handleImgError(img, group, member); // 大圖也要防呆
+    img.onerror = () => handleImgError(img, group, member);
     
     document.getElementById('view-name').innerText = member;
     document.getElementById('view-group').innerText = group;
@@ -626,7 +633,6 @@ function showPage(id) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); 
     document.getElementById(id).classList.add('active'); 
     window.scrollTo(0,0);
-    // 確保切換到蒐集冊時一定會渲染
     if(id === 'page-book') renderCollection(); 
 }
 function closeDrawModal() { document.getElementById('draw-modal').style.display = 'none'; showPage('page-home'); }

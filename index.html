@@ -3,1247 +3,633 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KTV 歌戰 V61 - 完整修正版</title>
+    <title>K-Pop 蒐集戰 V66</title>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-database-compat.js"></script>
     <style>
         :root { 
-            --ur-clr: #ffff00; --ssr-clr: #ff00ff; --sr-clr: #00d2ff; --r-clr: #ffffff;
-            --accent: #e91e63; --bg-dark: #0a0a0c; 
-            --male-clr: #4fc3f7; --female-clr: #ff8a80; --group-clr: #aed581;
+            --bg-dark: #121212; 
+            --card-bg: #1e1e1e;
+            --accent: #ff4081;
+            --highlight: #00e5ff;
+            --gold: #ffd700;
+            --male: #2196f3;
+            --female: #ff4081;
+            --group: #4caf50;
         }
         body { 
             font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; 
-            background: radial-gradient(circle at top, #1a1a2e, var(--bg-dark)); 
+            background: var(--bg-dark); 
             color: white; margin: 0; text-align: center; min-height: 100vh; padding-bottom: 80px;
         }
+        
+        /* 頂部資訊列 */
         .header { 
-            background: rgba(10, 10, 12, 0.95); backdrop-filter: blur(10px);
-            padding: 10px 20px; border-bottom: 1px solid rgba(233, 30, 99, 0.3);
+            background: rgba(30, 30, 30, 0.95); backdrop-filter: blur(5px);
+            padding: 10px 20px; border-bottom: 1px solid #333;
             position: sticky; top: 0; z-index: 100;
+            display: flex; justify-content: space-between; align-items: center;
         }
-        .header-top { display: flex; justify-content: space-between; align-items: center; }
-        .opp-list { display: flex; gap: 10px; overflow-x: auto; padding: 5px 0; font-size: 11px; border-top: 1px solid #222; margin-top: 5px; }
-        .opp-item { background: rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 20px; white-space: nowrap; cursor: pointer; }
-        .score { font-size: 28px; font-weight: 900; color: gold; text-shadow: 0 0 10px rgba(255,215,0,0.4); }
+        .player-info { text-align: left; }
+        .score-display { font-size: 20px; font-weight: bold; color: var(--gold); }
+
+        /* 按鈕系統 */
+        button { padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; color: white; margin: 5px 0; }
+        .btn-main { background: linear-gradient(45deg, #ff4081, #f50057); width: 100%; font-size: 18px; box-shadow: 0 4px 10px rgba(245,0,87,0.3); }
+        .btn-task { background: linear-gradient(45deg, #2196f3, #00e5ff); width: 100%; height: 60px; font-size: 20px; box-shadow: 0 4px 10px rgba(33,150,243,0.3); }
+        .btn-sec { background: #333; border: 1px solid #555; width: 100%; }
+        .btn-book { background: linear-gradient(45deg, #673ab7, #9c27b0); width: 100%; font-size: 18px; margin-top: 10px; }
+        .btn-add { background: #444; color: #aaa; width: auto; padding: 5px 15px; font-size: 12px; }
         
-        .page { display: none; padding: 20px 15px; animation: fadeIn 0.3s ease-in; }
+        /* 歌手兌換按鈕 */
+        .btn-singer-ex { 
+            background: linear-gradient(45deg, #ffb300, #ff6f00); color: black; 
+            width: 100%; margin-top: 15px; animation: pulse 1.5s infinite; 
+            display: none; 
+        }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
+
+        /* 頁面切換 */
+        .page { display: none; padding: 15px; animation: fadeIn 0.3s; }
         .active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes glowAnim { 
-            0% { box-shadow: 0 0 5px #ffd700; transform: scale(1); } 
-            50% { box-shadow: 0 0 25px #ffd700, 0 0 15px #ff9800; transform: scale(1.02); } 
-            100% { box-shadow: 0 0 5px #ffd700; transform: scale(1); } 
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* 主頁歌手名冊展示 */
+        .home-singer-section {
+            background: #1a1a1a; border-radius: 12px; padding: 15px; 
+            margin-bottom: 20px; border: 1px solid #333; text-align: left;
+        }
+        .singer-tags-container {
+            display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; max-height: 200px; overflow-y: auto;
+        }
+        .tag-display {
+            font-size: 12px; padding: 4px 8px; border-radius: 4px; 
+            display: inline-flex; align-items: center; gap: 5px;
+        }
+        .tag-display.m { background: rgba(33, 150, 243, 0.2); color: var(--male); border: 1px solid var(--male); }
+        .tag-display.f { background: rgba(255, 64, 129, 0.2); color: var(--female); border: 1px solid var(--female); }
+        .tag-display.g { background: rgba(76, 175, 80, 0.2); color: var(--group); border: 1px solid var(--group); }
+
+        /* 歌手輸入列 */
+        .singer-input-row { 
+            background: #1e1e1e; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #333; 
+            text-align: left;
+        }
+        .type-select { display: flex; gap: 5px; margin-bottom: 10px; }
+        .type-opt { 
+            flex: 1; padding: 10px; text-align: center; border-radius: 6px; font-size: 14px; cursor: pointer; border: 1px solid #444; color: #888; transition: 0.2s;
+        }
+        .type-opt.active.m { background: var(--male); color: white; border-color: var(--male); box-shadow: 0 0 8px var(--male); }
+        .type-opt.active.f { background: var(--female); color: white; border-color: var(--female); box-shadow: 0 0 8px var(--female); }
+        .type-opt.active.g { background: var(--group); color: white; border-color: var(--group); box-shadow: 0 0 8px var(--group); }
+
+        .input-field { 
+            width: 100%; padding: 12px; background: #111; border: 1px solid #444; color: white; border-radius: 5px; box-sizing: border-box; font-size: 16px;
         }
 
-        .card-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 15px; margin-bottom: 20px; position: relative; }
-        
-        .scout-section { margin-bottom: 15px; background: rgba(0,0,0,0.4); border-radius: 12px; overflow: hidden; }
-        .scout-header { padding: 8px; font-size: 14px; font-weight: bold; text-align: left; padding-left: 15px; }
-        .scout-content { padding: 10px; display: flex; flex-wrap: wrap; gap: 8px; min-height: 40px; }
-        
-        button { padding: 12px 20px; border-radius: 10px; border: none; cursor: pointer; font-weight: bold; font-size: 15px; transition: 0.2s; color: white; }
-        .btn-main { background: linear-gradient(45deg, #e91e63, #ff4081); width: 100%; margin: 8px 0; box-shadow: 0 4px 15px rgba(233,30,99,0.3); }
-        .btn-sec { background: #333; width: 100%; margin: 5px 0; border: 1px solid #555; }
-        .btn-challenge { background: linear-gradient(45deg, #f44336, #ff9800); width: 100%; height: 70px; font-size: 20px; margin: 15px 0; }
-        .btn-counter { background: linear-gradient(45deg, #673ab7, #9c27b0); border: 1px solid gold; box-shadow: 0 0 15px rgba(255,215,0,0.3); width: 100%; margin-bottom: 5px;}
-        .btn-disabled { background: #444 !important; color: #888 !important; cursor: not-allowed !important; box-shadow: none !important; border: 1px solid #555 !important; }
-        
-        /* V61: 明亮的發光按鈕 */
-        .btn-glow {
-            background: linear-gradient(45deg, #ffd700, #ffeb3b) !important;
-            color: #000 !important;
-            animation: glowAnim 1.5s infinite;
-            border: 2px solid #fff !important;
-            text-shadow: none !important;
-            font-weight: 900;
+        /* 統一歷史標籤區 */
+        .history-tags-area {
+            margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; 
+            background: #111; padding: 8px; border-radius: 8px;
         }
+        .quick-tag { 
+            font-size: 11px; padding: 4px 10px; border-radius: 15px; cursor: pointer; transition: 0.2s; 
+            border: 1px solid #333; opacity: 0.8;
+        }
+        .quick-tag:hover { transform: scale(1.05); opacity: 1; }
+        .quick-tag.t-m { color: var(--male); border-color: var(--male); background: rgba(33, 150, 243, 0.1); }
+        .quick-tag.t-f { color: var(--female); border-color: var(--female); background: rgba(255, 64, 129, 0.1); }
+        .quick-tag.t-g { color: var(--group); border-color: var(--group); background: rgba(76, 175, 80, 0.1); }
 
-        .singer-tag { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 13px; background: rgba(255,255,255,0.1); border: 1px solid transparent; }
+        /* 蒐集冊 */
+        .group-section { background: #1e1e1e; border-radius: 12px; margin-bottom: 20px; padding: 15px; border: 1px solid #333; text-align: left; }
+        .group-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 8px; }
+        .group-name { font-size: 18px; font-weight: bold; }
+        .group-complete { border: 2px solid var(--gold); box-shadow: 0 0 10px rgba(255, 215, 0, 0.2); }
         
-        .res-card { padding: 10px 5px; border-radius: 10px; border: 2px solid #444; background: #111; font-weight: bold; text-align: center; font-size: 12px; position: relative; cursor: pointer; min-height: 80px; display:flex; flex-direction:column; justify-content:center; align-items:center;}
-        .UR { border-color: var(--ur-clr); color: var(--ur-clr); box-shadow: 0 0 10px rgba(255,255,0,0.2); }
-        .SSR { border-color: var(--ssr-clr); color: var(--ssr-clr); }
-        .SR { border-color: var(--sr-clr); color: var(--sr-clr); }
-        .R { border-color: var(--r-clr); color: var(--r-clr); }
+        .member-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .member-card { 
+            background: #111; border-radius: 8px; padding: 5px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 90px; border: 1px solid #333; opacity: 0.4; cursor: default;
+        }
+        .member-card.owned { opacity: 1; border-color: var(--accent); cursor: pointer; transition: transform 0.1s; }
+        .member-card.owned:active { transform: scale(0.95); }
+        
+        .card-thumb {
+            width: 50px; height: 50px; border-radius: 5px; background: #333; margin-bottom: 5px; object-fit: cover;
+        }
 
         /* Modal */
-        #modal, #alert-modal, #spy-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: none; justify-content: center; align-items: center; z-index: 200; padding: 20px; }
-        .modal-content { background: #161618; padding: 25px; border-radius: 20px; width: 95%; max-width: 400px; border: 1px solid #333; text-align: left; position: relative; max-height: 80vh; overflow-y: auto;}
+        #draw-modal, #card-view-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: none; justify-content: center; align-items: center; z-index: 500; }
         
-        .toast { position: fixed; top: 15%; left: 50%; transform: translateX(-50%); background: rgba(20,20,20,0.95); border: 1px solid var(--accent); color: white; padding: 15px 25px; border-radius: 30px; z-index: 300; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.8); display:none; max-width: 90%; white-space: pre-wrap; font-weight: bold;}
-        
-        .entry-row { display: flex; gap: 5px; margin-bottom: 8px; justify-content: center; }
-        .singer-in { width: 60%; background: #222; border: 1px solid #444; padding: 10px; border-radius: 8px; color: white; }
-        .type-in { width: 30%; background: #222; border: 1px solid #444; border-radius: 8px; color: white; }
-        
-        .spy-data-box { background: #000; border: 1px solid #333; padding: 10px; margin-top: 10px; border-radius: 8px; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 13px; color: #0f0; }
+        /* 卡片大圖檢視 */
+        .card-view-content {
+            background: #222; border: 2px solid var(--accent); border-radius: 15px; padding: 20px; 
+            width: 90%; max-width: 320px; text-align: center; position: relative;
+            box-shadow: 0 0 30px rgba(255, 64, 129, 0.3);
+        }
+        .card-big-img {
+            width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 10px; margin-bottom: 15px; background: #000;
+        }
+        .card-big-name { font-size: 24px; font-weight: bold; color: white; margin-bottom: 5px; }
+        .card-big-group { font-size: 14px; color: var(--highlight); margin-bottom: 15px; }
+
+        .task-box { border: 1px solid var(--highlight); border-radius: 12px; padding: 20px; margin-bottom: 20px; background: rgba(0, 229, 255, 0.05); }
+        .toast { position: fixed; top: 20%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; z-index: 1000; display: none; }
     </style>
 </head>
 <body>
 
-<div id="toast" class="toast">
-    <div id="toast-msg"></div>
-</div>
+<div id="toast" class="toast"></div>
 
 <div class="header" id="ui-header" style="display:none;">
-    <div class="header-top">
-        <div><div id="display-name" style="color:var(--accent); font-weight:bold;"></div><div class="score" id="display-score">0</div></div>
-        <div style="text-align: right;"><span style="font-size:10px; color:#555;">ROOM</span><br><b id="display-room"></b></div>
+    <div class="player-info">
+        <div id="display-name" style="color:var(--highlight); font-weight:bold;"></div>
+        <div style="font-size:10px; color:#888;">ROOM: <span id="display-room"></span></div>
     </div>
-    <div class="opp-list" id="opp-list-box"></div>
+    <div style="text-align: right;">
+        <div class="score-display" id="total-groups-completed">0 👑</div>
+    </div>
 </div>
 
 <div id="page-login" class="page active">
-    <h1 style="font-size: 36px; color:var(--accent);">KTV 歌戰 V61</h1>
-    <p style="color: #888; margin-bottom: 30px;">完整修正 • 互動強化版</p>
-    <input type="text" id="inName" placeholder="暱稱" style="width:80%; padding:15px; background:#111; border:1px solid #333; border-radius:10px; color:white; margin-bottom:10px;">
-    <input type="text" id="inRoom" placeholder="房號" style="width:80%; padding:15px; background:#111; border:1px solid #333; border-radius:10px; color:white; margin-bottom:20px;">
-    <button class="btn-main" onclick="initGame()">進入包廂</button>
+    <h1 style="color:var(--accent);">K-Pop 蒐集戰 V66</h1>
+    <p style="color:#888; font-size:12px;">圖片路徑修復 • 智慧標籤 • 蒐集冊優化</p>
+    <input type="text" id="inName" placeholder="你的暱稱" style="width:80%; padding:15px; background:#222; border:1px solid #444; color:white; border-radius:8px; margin-bottom:10px;">
+    <input type="text" id="inRoom" placeholder="房間號碼" style="width:80%; padding:15px; background:#222; border:1px solid #444; color:white; border-radius:8px; margin-bottom:20px;">
+    <button class="btn-main" onclick="initGame()">開始挑戰</button>
 </div>
 
 <div id="page-home" class="page">
-    <div class="card-box">
-        <div style="display:flex; justify-content:space-between; font-size:14px; margin-bottom:10px;">
-            <span>🌟 不同歌手成就</span>
-            <span id="scout-count-text" style="color:gold;">0 / 10</span>
+    <div class="home-singer-section">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong>🎤 已蒐集歌手名冊</strong>
+            <span style="font-size:12px; color:#aaa;" id="unique-singer-count">0 位不重複</span>
         </div>
-        
-        <div class="scout-section" style="border-left: 4px solid var(--male-clr);">
-            <div class="scout-header" style="color:var(--male-clr); background:rgba(33, 150, 243, 0.1);">👨‍🎤 男歌手</div>
-            <div id="list-male" class="scout-content"></div>
-        </div>
-
-        <div class="scout-section" style="border-left: 4px solid var(--female-clr);">
-            <div class="scout-header" style="color:var(--female-clr); background:rgba(244, 67, 54, 0.1);">👩‍🎤 女歌手</div>
-            <div id="list-female" class="scout-content"></div>
-        </div>
-
-        <div class="scout-section" style="border-left: 4px solid var(--group-clr);">
-            <div class="scout-header" style="color:var(--group-clr); background:rgba(76, 175, 80, 0.1);">🎤 團體</div>
-            <div id="list-group" class="scout-content"></div>
-        </div>
-
-        <button id="scout-draw-btn" class="btn-main" style="background:#222; color:#555; margin-top:10px;" onclick="scoutDrawReward()" disabled>領取獎勵 (10位不同歌手)</button>
+        <div id="home-singer-list" class="singer-tags-container"></div>
+        <button id="btn-singer-exchange" class="btn-singer-ex" onclick="redeemSingers()">
+            🎁 消耗 10 位不重複歌手<br>兌換 2 張女團卡片
+        </button>
     </div>
 
-    <button class="btn-challenge" onclick="prepareAndStartTask()">🎤 抽取挑戰任務</button>
+    <button class="btn-task" onclick="startTask()">🎤 抽取挑戰任務</button>
+    <button class="btn-book" onclick="showPage('page-book')">📕 開啟成員蒐集冊</button>
     
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-        <button class="btn-sec" onclick="openCollection()">我的卡冊</button>
-        <button class="btn-sec" onclick="location.reload()">切換房間</button>
-        <button class="btn-sec" onclick="testGetAllCards()" style="grid-column: span 2; border-color: gold; color: gold;">[測試] 獲得所有卡片</button>
+    <div style="margin: 20px 0;">
+        <button class="btn-sec" onclick="toggleExchangeMode()" id="btn-exchange-toggle">♻️ 5換1 保底兌換模式</button>
+        <button class="btn-sec" onclick="location.reload()" style="margin-top:10px;">登出系統</button>
+    </div>
+
+    <div id="ranking-box" style="padding:15px; background:#111; border-radius:12px; font-size:13px; text-align:left;">
+        <strong style="color:var(--highlight);">📊 房間玩家進度：</strong>
+        <div id="ranking-list" style="margin-top:10px;"></div>
     </div>
 </div>
 
 <div id="page-challenge" class="page">
-    <div class="card-box" style="border-color: #ff9800;">
-        <h3 style="margin:0 0 10px 0; color:#ff9800;">目前挑戰</h3>
-        <div id="task-text" style="font-size:18px; color:#ddd; margin-bottom:10px;"></div>
-        <div id="extra-box" style="font-size:24px; color:gold; font-weight:bold; margin-bottom:10px;"></div>
-        <div id="task-reward" style="font-size:12px; color:#aaa;"></div>
+    <h2 style="color:var(--highlight);">挑戰任務</h2>
+    <div class="task-box">
+        <div id="task-desc" style="font-size:24px; font-weight:bold; margin-bottom:10px;"></div>
+        <div id="task-extra" style="font-size:28px; color:var(--gold); font-weight:900;"></div>
+        <p id="task-reward" style="color:#aaa;"></p>
     </div>
+    <button class="btn-main" onclick="goToSettlement()">✅ 挑戰成功 (前往登錄)</button>
+    <button class="btn-sec" onclick="rerollTask()">🎲 消耗1位隨機歌手重抽</button>
+    <button class="btn-sec" onclick="showPage('page-home')">放棄返回</button>
+</div>
+
+<div id="page-settle" class="page">
+    <h2 style="color:var(--group);">歌手登錄結算</h2>
+    <p style="color:#888; font-size:14px;">點擊下方標籤可快速輸入</p>
     
-    <button class="btn-sec" style="background: #3f51b5; border:none;" onclick="openCollection(true)">🃏 使用卡片 (加倍/重抽)</button>
-    <button class="btn-main" style="background: #4caf50; margin-top:20px;" onclick="showPage('page-singer-entry')">✅ 我唱完了！</button>
-    <button class="btn-sec" onclick="showPage('page-home')">返回首頁 (放棄)</button>
-</div>
+    <div id="singer-input-container"></div>
 
-<div id="page-singer-entry" class="page">
-    <h3>輸入演唱資訊</h3>
-    <div id="singer-inputs-container"></div>
-    <button onclick="addInput()" class="btn-sec" style="font-size:12px;">＋ 合唱/多位歌手</button>
+    <button class="btn-add" onclick="addSingerInputRow()">＋ 新增演唱歌手 (合唱)</button>
     
-    <div style="margin-top:20px;">
-        <p style="font-size:12px; color:#aaa;">點擊歷史紀錄快速輸入：</p>
-        <div id="history-tags-container" style="display:flex; flex-wrap:wrap; gap:5px; max-height:100px; overflow-y:auto; justify-content:center;"></div>
+    <div style="margin-top:30px;">
+        <button class="btn-main" style="background:var(--group);" onclick="finalizeSettlement()">確認登錄並抽卡</button>
     </div>
-
-    <button class="btn-main" style="margin-top:30px;" onclick="saveSingersAndDraw()">確認並領卡</button>
-    <button class="btn-sec" onclick="showPage('page-challenge')">返回</button>
 </div>
 
-<div id="page-machine" class="page">
-    <h2 style="color:gold;">獲得卡片！</h2>
-    <div id="draw-result-list" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;"></div>
-    <button class="btn-main" style="margin-top:20px;" onclick="showPage('page-home')">確認</button>
-</div>
-
-<div id="page-collection" class="page">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h2>我的卡冊</h2>
-        <span id="card-count" style="font-size:12px; color:#aaa;"></span>
+<div id="page-book" class="page">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2 style="margin:0;">成員蒐集冊</h2>
+        <button class="btn-sec" style="width:auto;" onclick="showPage('page-home')">返回</button>
     </div>
-    <div id="goblin-merge-area" style="display:none; margin-bottom:10px;">
-        <button class="btn-main" style="background:#4caf50;" onclick="mergeGoblin()">🟢 合成哥布林 (5換1)</button>
-    </div>
-    <div id="coll-list" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-bottom:30px;"></div>
-    <button class="btn-main" style="background: #222;" onclick="backFromCollection()">返回</button>
-</div>
-
-<div id="modal" onclick="closeModal()">
-    <div class="modal-content" onclick="event.stopPropagation()">
-        <div style="display:flex; justify-content:space-between;">
-            <h2 id="m-rarity" style="margin:0;"></h2>
-            <span id="m-id" style="color:#666;"></span>
+    <div id="collection-container">
         </div>
-        <h3 id="m-name" style="margin:10px 0; color:white;"></h3>
-        <p id="m-desc" style="color:#aaa; white-space: pre-wrap; line-height:1.5; font-size:14px;"></p>
-        
-        <div id="target-select-area" style="display:none; margin:15px 0;">
-            <p style="color:var(--accent); font-size:14px; margin-bottom:5px;">選擇目標：</p>
-            <select id="target-dropdown" style="width:100%; padding:12px; border-radius:8px; background:#222; color:white; border:1px solid #444;"></select>
-        </div>
+</div>
 
-        <div style="display:grid; gap:10px;">
-            <button id="use-btn" class="btn-main">發動技能</button>
-            <button class="btn-sec" onclick="closeModal()">關閉</button>
-        </div>
+<div id="draw-modal">
+    <div style="text-align:center;">
+        <h2 style="color:var(--gold);">✨ 獲得成員卡片！</h2>
+        <div id="draw-results" style="display:flex; flex-wrap:wrap; justify-content:center;"></div>
+        <button class="btn-main" style="margin-top:20px; width:200px;" onclick="closeDrawModal()">收進口袋</button>
     </div>
 </div>
 
-<div id="alert-modal">
-    <div class="modal-content">
-        <h3 id="alert-title" style="color:gold;">提示</h3>
-        <p id="alert-msg" style="line-height:1.5; margin-bottom:20px;"></p>
-        <div id="alert-actions" style="display:grid; gap:10px;"></div>
-    </div>
-</div>
-
-<div id="spy-modal">
-    <div class="modal-content">
-        <h3 style="color:#00d2ff;">🕵️ 偵查報告</h3>
-        <div id="spy-content" class="spy-data-box"></div>
-        <button class="btn-main" style="margin-top:15px;" onclick="document.getElementById('spy-modal').style.display='none'">關閉</button>
+<div id="card-view-modal" onclick="closeCardView()">
+    <div class="card-view-content" onclick="event.stopPropagation()">
+        <img id="view-img" class="card-big-img" src="" alt="Card Image">
+        <div id="view-name" class="card-big-name"></div>
+        <div id="view-group" class="card-big-group"></div>
+        <button class="btn-sec" onclick="closeCardView()">關閉</button>
     </div>
 </div>
 
 <script>
 // ==================== 資料庫 ====================
-const ZHUYIN = ["ㄅㄚ","ㄅㄛ","ㄅㄞ","ㄅㄟ","ㄅㄠ","ㄅㄢ","ㄅㄣ","ㄅㄤ","ㄅㄥ","ㄉㄚ","ㄉㄜ","ㄉㄞ","ㄉㄟ","ㄉㄠ","ㄉㄡ","ㄉㄢ","ㄉㄣ","ㄉㄤ","ㄉㄥ","ㄍㄚ","ㄍㄜ","ㄍㄞ","ㄍㄟ","ㄍㄠ","ㄍㄡ","ㄍㄢ","ㄍㄣ","ㄍㄤ","ㄍㄥ","ㄓㄚ","ㄓㄜ","ㄓㄞ","ㄓㄠ","ㄓㄡ","ㄓㄢ","ㄓㄣ","ㄓㄤ","ㄓㄥ","ㄓ","ㄗㄚ","ㄗㄜ","ㄗㄞ","ㄗㄟ","ㄗㄠ","ㄗㄡ","ㄗㄢ","ㄗㄣ","ㄗㄤ","ㄗㄥ","ㄗ","ㄚ","ㄛ","ㄜ","ㄝ","ㄞ","ㄟ","ㄠ","ㄡ","ㄢ","ㄣ","ㄤ","ㄥ","ㄦ","ㄅㄧ","ㄅㄧㄝ","ㄅㄧㄠ","ㄅㄧㄢ","ㄅㄧㄣ","ㄅㄧㄥ","ㄉㄧ","ㄉㄧㄝ","ㄉㄧㄠ","ㄉㄧㄡ","ㄉㄧㄢ","ㄉㄧㄥ","ㄐㄧ","ㄐㄧㄚ","ㄐㄧㄝ","ㄐㄧㄠ","ㄐㄧㄡ","ㄐㄧㄢ","ㄐㄧㄣ","ㄐㄧㄤ","ㄐㄧㄥ","ㄧ","ㄧㄚ","ㄧㄛ","ㄧㄝ","ㄧㄞ","ㄧㄠ","ㄧㄡ","ㄧㄢ","ㄧㄣ","ㄧㄤ","ㄧㄥ","ㄅㄨ","ㄆㄨ","ㄇㄨ","ㄈㄨ","ㄉㄨ","ㄉㄨㄛ","ㄉㄨㄟ","ㄉㄨㄢ","ㄉㄨㄣ","ㄉㄨㄥ","ㄍㄨ","ㄍㄨㄚ","ㄍㄨㄛ","ㄍㄨㄞ","ㄍㄨㄟ","ㄍㄨㄢ","ㄍㄨㄣ","ㄍㄨㄤ","ㄓㄨ","ㄓㄨㄚ","ㄓㄨㄛ","ㄓㄨㄞ","ㄓㄨㄟ","ㄓㄨㄢ","ㄓㄨㄣ","ㄓㄨㄤ","ㄗㄨ","ㄗㄨㄛ","ㄗㄨㄟ","ㄗㄨㄢ","ㄗㄨㄣ","ㄨ","ㄨㄚ","ㄨㄛ","ㄨㄞ","ㄨㄟ","ㄨㄢ","ㄨㄣ","ㄨㄤ","ㄨㄥ","ㄋㄩ","ㄋㄩㄝ","ㄌㄩ","ㄌㄩㄝ","ㄐㄩ","ㄐㄩㄝ","ㄐㄩㄢ","ㄐㄩㄣ","ㄐㄩㄥ","ㄩ","ㄩㄝ","ㄩㄢ","ㄩㄣ","ㄩㄥ"];
-
-const LYRICS_DB = [
-    {s:"七里香",l:"窗外的麻雀 在電線桿上多嘴"},{s:"聽媽媽的話",l:"小朋友你是否有很多問號"},{s:"告白氣球",l:"親愛的 愛上你 從那天起 甜蜜得很輕易"},{s:"小幸運",l:"遇見妳是最美麗的意外"},{s:"十年",l:"如果那兩個字沒有顫抖 我不會發現我難受"},{s:"情非得已",l:"難以忘記初次見你 一雙迷人的眼睛"},{s:"泡沫",l:"陽光下的彩虹 是色彩繽紛的"},{s:"體面",l:"分手應該保持風度 誰都不要說抱歉"},{s:"說謊",l:"我沒有騙人 我何必騙人"},{s:"倒帶",l:"終於看開愛回不來 而你總是太晚明白"},{s:"珊瑚海",l:"海鳥跟魚相愛 只是一場意外"},{s:"簡單愛",l:"我想帶你騎單車 我想和你看棒球"},{s:"温柔",l:"然後呢 他們說你的心 似乎痊癒了"},{s:"倔強",l:"我和我最後的執著 握緊雙手絕對不放"},{s:"我不願讓你一個人",l:"你說過 如果我不在身邊 也要努力生活"},{s:"修煉愛情",l:"這感情的心酸 學會放逐練習"},{s:"那些年",l:"又回到最初的起點 呆呆地站在鏡子前"},{s:"紅豆",l:"有時候 有時候 我會相信一切有盡頭"},{s:"家後",l:"有一日咱若老 找無人湊噴叨"},{s:"如果可以",l:"我想和你回到那天相遇 假如命運重寫"},{s:"帶我走",l:"到遙遠的以後 什麼都不用帶"},{s:"以後別做朋友",l:"雖然不能牽手 還是可以問候"},{s:"明明就",l:"他比較溫柔 也比較用心地懂你"},{s:"妳是我的花朵",l:"就算妳呵護我 就算妳折磨我 喔～"},{s:"你是我的眼",l:"帶我領略四季的輪替 帶我穿越擁擠的人潮"},{s:"背叛",l:"緊緊相依的心如何 Say goodbye"},{s:"浪子回頭",l:"菸一支一支一支地點 酒一杯一杯一杯地乾"},{s:"醜八怪",l:"能不能別把燈打開 像是在演一齣意外"},{s:"演員",l:"簡單點 說話的方式簡單點"},{s:"追光者",l:"我可以跟在你身後 像影子追著夢遊"},{s:"刻在我心底的名字",l:"你忘記了姓名的請別在意 就像我消失在你的世界"},{s:"這世界那麼多人",l:"多幸運 我有個我們"},{s:"愛你",l:"如果你突然打了個噴嚏 那一定是我在想你"},{s:"私奔到月球",l:"一二三 牽著手 四五六 抬起頭"},{s:"突然好想你",l:"你會在哪裡 過得快樂或委屈"},{s:"你是答案",l:"不用尋找 因為你就是"},{s:"挪威的森林",l:"讓我將妳心兒摘下 試著將它慢慢融化"},{s:"愛拼才會贏",l:"三分天注定 七分靠打拼"},{s:"我的歌聲裡",l:"你存在 我深深的腦海裡"},{s:"想見你想見你想見你",l:"未來過去 我只想找妳"},{s:"魚仔",l:"花在風中 搖來搖去 搖來搖去"},{s:"披星戴月的想你",l:"我會奮不顧身的前進 奔向那不知名的遠方"},{s:"在那座燈塔",l:"指引著 迷失航線的小船"},{s:"模特",l:"穿著剛及膝的藍裙子"},{s:"李白",l:"要是能重來 我要選另一個人生"},{s:"王妃",l:"搖晃的紅酒杯 嘴唇像染著鮮血"},{s:"平凡之路",l:"我曾經跨過山和大海 也穿過人山人海"},{s:"消愁",l:"一杯敬自由 一杯敬死亡"},{s:"千年之戀",l:"誰在海邊 悄悄守候"},{s:"你是我的老婆",l:"從今以後 執子之手 哪怕路再難走"},{s:"江南",l:"圈圈圓圓圈圈 天天年年天天的我"},{s:"關鍵詞",l:"好好愛自己 就像是遇到了奇蹟"},{s:"涼涼",l:"夜色 為你思念成河"},{s:"剛好遇見你",l:"留下足跡才美麗 我們在最好的時光"},{s:"慢慢喜歡你",l:"慢慢的回憶 慢慢的陪你老去"},{s:"年少有為",l:"假如我不自卑 懂得什麼是珍貴"},{s:"光年之外",l:"我沒想到 為了你 我能瘋狂到"},{s:"野狼Disco",l:"心裡的花 我想要帶你回家"},{s:"你要跳舞嗎",l:"你你你 準備好了嗎 每當浪潮來臨的時候"},{s:"聽海",l:"看 海哭的聲音"},{s:"洋蔥",l:"如果你願意一層一層一層地剝開我的心"},{s:"遇見",l:"我遇見誰 會有怎樣的對白"},{s:"成全",l:"給了你的瀟灑與冒險 也要謝謝你的大方"},{s:"後來",l:"我總算學會了如何去愛"},{s:"勇氣",l:"愛真的需要很大決心 來面對流言蜚語"},{s:"單身情歌",l:"抓不住愛情的我 總是眼睜睜看它溜走"},{s:"可惜不是你",l:"陪我到最後 曾一起走過的路口"},{s:"我懷念的",l:"我懷念的是無話不說 我懷念的是一起發夢"},{s:"隱形的翅膀",l:"我終於翱翔 用心凝望不害怕"},{s:"天黑黑",l:"欲落雨 阮阿公仔要鋤頭"},{s:"千里之外",l:"我送你離開 你無聲黑白"},{s:"青花瓷",l:"天青色等煙雨 而我在等你"},{s:"菊花台",l:"殘 滿地傷 你的笑容已泛黃"},{s:"雙截棍",l:"快使用 哼哼哈兮"},{s:"牛仔很忙",l:"不用麻煩了 不用麻煩了 嗚哈"},{s:"蒲公英的約定",l:"小學籬笆旁的 那畫面很美"},{s:"本草綱目",l:"如果華陀再世 崇洋都被醫治"},{s:"明明就",l:"糖果罐裡跌落的琴鍵 旋律在發燒"},{s:"算什麼男人",l:"妳眼睜睜看她走 妳卻一句話都不說"},{s:"等你下課",l:"你住的巷子裡 我租了一間公寓"},{s:"不該",l:"雪地裡相愛 他們說零下已結晶的誓言"},{s:"擱淺",l:"我只能 永遠朝著遠方望著你的背影"},{s:"楓",l:"緩緩飄落的葉像思念"},{s:"開不了口",l:"就是說不出來 讓他知道"},{s:"軌跡",l:"我會擦去我不小心滴下的淚水"},{s:"斷了的弦",l:"再怎麼連 我的感覺"},{s:"不能說的秘密",l:"冷咖啡離開了杯墊"},{s:"彩虹",l:"看不見妳的笑我怎麼睡得著"},{s:"說好的幸福呢",l:"你的回話凌亂著 歌詞也寫得不清楚"},{s:"安靜",l:"只剩下鋼琴陪我彈了一天"},{s:"龍捲風",l:"愛情來得太快 離不開 暴風圈"},{s:"簡單愛",l:"我想大聲宣佈 對你依依不捨"},{s:"半島鐵盒",l:"走廊燈關上 書包放"},{s:"可愛女人",l:"漂亮的讓我面紅的 溫柔的"},{s:"星晴",l:"手牽手一步兩步三步四步望著天"},{s:"晴天",l:"故事的小黃花 從出生那年就飄著"},{s:"稻香",l:"還記得你說家是唯一的城堡"},{s:"東風破",l:"誰在用琵琶彈奏一曲"},{s:"夜曲",l:"為你彈奏蕭邦的 這感覺很孤獨"},{s:"一路向北",l:"後視鏡裡的世界 越來越遠"},{s:"我不配",l:"這感覺已經不對 我努力挽回"},{s:"髮如雪",l:"妳淒美了離別 惹紅塵怨"},{s:"聽見下雨的聲音",l:"而我發現妳始終在那"},{s:"愛在西元前",l:"祭司神殿征戰弓箭"},{s:"屋頂",l:"在上面唱著你的歌"},{s:"珊瑚海",l:"笑容在等待 淚水在表白"},{s:"淘汰",l:"只能說我輸了 也許是你不需要了"},{s:"愛我別走",l:"如果妳說妳不愛我 妳就真的不愛我"},{s:"對面的女孩看過來",l:"寂寞男孩情懷 其實我也很可愛"},{s:"吻別",l:"我和你 在無人的街"},{s:"一千個傷心的理由",l:"最後在別人的故事裡 我被遺忘"},{s:"月亮代表我的心",l:"妳問我愛妳有多深 我愛妳有幾分"},{s:"甜蜜蜜",l:"你笑得多好看 好像花兒開在春風裡"},{s:"小情歌",l:"這是一首簡單的 我只想說愛妳"},{s:"無與倫比的美麗",l:"妳知道當妳需要個夏天 我會拼了命努力"},{s:"再見",l:"我怕我沒有機會 跟你說一聲"},{s:"思念是一種病",l:"當你在穿山越嶺的另一邊"},{s:"旅行的意義",l:"你離開我 就是最後的答案"},{s:"好久不見",l:"你會不會突然的出現 在街角的咖啡店"},{s:"紅玫瑰",l:"得不到的永遠在騷動"},{s:"浮誇",l:"那年十八 母校舞會"},{s:"K歌之王",l:"我以為要是唱得用心良苦 妳就會感動"},{s:"十年",l:"十年之前 我不認識你"},{s:"愛是懷疑",l:"這感覺是妒忌 也是不相信"},{s:"愛情轉移",l:"徘徊過多少櫥窗 住過多少旅館"},{s:"孤勇者",l:"愛你孤身走暗巷 愛你卑微的模樣"},{s:"那女孩對我說",l:"說我保護她的夢 說我像個英雄"},{s:"年少有為",l:"假如我不自卑 我會不會更快樂"},{s:"體面",l:"離開應該灑脫 誰都不要回頭"},{s:"消愁",l:"寬恕我的執著 哪怕遍體鱗傷"},{s:"平凡之路",l:"直到看見平凡才是唯一的答案"},{s:"夜空中最亮的星",l:"能否聽清 那仰望的人 心底的孤獨"},{s:"當你",l:"妳眼睛瞇著笑 妳說世界多美好"},{s:"愛妳",l:"話說多一點 想我多一點"},{s:"心牆",l:"妳有一整面牆 的心事"},{s:"遺失的美好",l:"我始終帶著微笑 離妳遠去"},{s:"歐若拉",l:"愛是一道光 如此美妙"},{s:"隱形的翅膀",l:"帶我飛 給我希望"},{s:"淋雨一直走",l:"不准意志消沉 只要相信就有可能"},{s:"倒帶",l:"你的所有理由 全部都是藉口"},{s:"看我72變",l:"美麗極限 愛漂亮沒有終點"},{s:"布拉格廣場",l:"我就站在那裡 畫面太美"},{s:"說愛你",l:"我的世界 變得奇妙更難以言喻"},{s:"日不落",l:"天空的霧來得漫不經心 祈禱著那一秒"},{s:"舞孃",l:"旋轉 跳躍 我閉著眼"},{s:"記事本",l:"翻開隨身攜帶的 寫著妳的名字"},{s:"莫斯科郊外的晚上",l:"深夜花園裡 靜悄悄"},{s:"我的歌聲裡",l:"在那深夜的夢裡 在那無聲的街道"},{s:"剛好遇見你",l:"我們說好不分離 要一直在一起"},{s:"沙漠駱駝",l:"我要跨上這神祕的坐騎 奔向遠方"},{s:"芒種",l:"一想到你我就 嗚嗚嗚"},{s:"我的好兄弟",l:"在你輝煌的時刻"},{s:"後來",l:"有些人 一旦錯過就不再"},{s:"為你我受冷風吹",l:"寂寞時候 流眼淚"},{s:"領悟",l:"我以為我會報復 我以為我會哭"},{s:"味道",l:"想念你白色的襪子 和你身上的淡淡香水"},{s:"征服",l:"終於找到藉口 讓自己徹底死心"},{s:"廣島之戀",l:"你早就該拒絕我 不該放任我的追求"},{s:"今天妳要嫁給我",l:"春暖的花開 帶走冬天的感傷"},{s:"小酒窩",l:"長睫毛 是你最美的記號"},{s:"修煉愛情",l:"別講想念 我沒說謊"},{s:"可惜沒如果",l:"全都怪我 不該說得那麼多"},{s:"曹操",l:"不是英雄 不讀三國"},{s:"那些年",l:"黑板上排列組合 你捨得解開嗎"},{s:"天后",l:"我嫉妒你的愛 氣勢如虹"},{s:"情歌",l:"時光是琥珀 淚一滴滴被鑲嵌"},{s:"勇氣",l:"只要你也一樣的肯定"},{s:"寧夏",l:"寧靜的夏天 天空中繁星點點"},{s:"暖暖",l:"都可以 隨便的"},{s:"燕尾蝶",l:"你是火 你是光 你是唯一的"},{s:"一場遊戲一場夢",l:"不要談什麼分離 我早習慣孤獨"},{s:"挪威的森林",l:"或許妳從來不曾懂我"},{s:"浪人情歌",l:"不要再想妳 不要再愛妳"},{s:"真心英雄",l:"在我心中 曾經有一個夢"},{s:"聽海",l:"寫封信給妳"},{s:"剪愛",l:"人若真能轉世世間"},{s:"我願意",l:"思念是一種很玄的東西"},{s:"紅豆",l:"寧願選擇留戀不放手"},{s:"棋子",l:"想走出你控制的領域"},{s:"白天不懂夜的黑",l:"你永遠不懂我傷悲"},{s:"過火",l:"是否對你承諾過頭"},{s:"愛如潮水",l:"不問你為何流眼淚"},{s:"至少還有你",l:"我怕來不及 我要抱著你"},{s:"為愛痴狂",l:"想要問問你敢不敢"},{s:"很愛很愛你",l:"所以願意 不讓你受委屈"},{s:"傷心太平洋",l:"離開真的殘酷嗎"},{s:"心太軟",l:"你總是把事情想得太複雜"}];
+const GIRL_GROUPS = {
+    "BLACKPINK": ["Jisoo", "Jennie", "Rosé", "Lisa"],
+    "aespa": ["Karina", "Giselle", "Winter", "Ningning"],
+    "IVE": ["Yujin", "Gaeul", "Rei", "Wonyoung", "Liz", "Leeseo"],
+    "NewJeans": ["Minji", "Hanni", "Danielle", "Haerin", "Hyein"],
+    "ITZY": ["Yeji", "Lia", "Ryujin", "Chaeryeong", "Yuna"],
+    "LE SSERAFIM": ["Chaewon", "Sakura", "Yunjin", "Kazuha", "Eunchae"],
+    "(G)I-DLE": ["Miyeon", "Minnie", "Soyeon", "Yuqi", "Shuhua"],
+    "NMIXX": ["Haewon", "Lily", "Sullyoon", "Bae", "Jiwoo", "Kyujin"],
+    "BabyMonster": ["Ruka", "Pharita", "Asa", "Ahyeon", "Rami", "Rora", "Chiquita"],
+    "TWICE": ["Nayeon", "Jeongyeon", "Momo", "Sana", "Jihyo", "Mina", "Dahyun", "Chaeyoung", "Tzuyu"],
+    "ILLIT": ["Yunah", "Minju", "Moka", "Wonhee", "Iroha"],
+    "Red Velvet": ["Irene", "Seulgi", "Wendy", "Joy", "Yeri"],
+    "MEOVV": ["Sooin", "Gawon", "Anna", "Narin", "Ella"],
+    "QWER": ["Chodan", "Magenta", "Hina", "Siyeon"],
+    "IZ*ONE": ["Eunbi", "Sakura", "Hyewon", "Yena", "Chaeyeon", "Chaewon", "Minju", "Nako", "Hitomi", "Yuri", "Yujin", "Wonyoung"],
+    "Gfriend": ["Sowon", "Yerin", "Eunha", "Yuju", "SinB", "Umji"],
+    "EXID": ["Solji", "LE", "Hani", "Hyelin", "Jeonghwa"],
+    "Girls' Generation": ["Taeyeon", "Sunny", "Tiffany", "Hyoyeon", "Yuri", "Sooyoung", "Yoona", "Seohyun"],
+    "tripleS": ["SeoYeon", "HyeRin", "JiWoo", "ChaeYeon", "YooYeon", "SooMin", "NaKyoung", "YuBin", "Kaede", "DaHyun", "Kotone", "YeonJi", "Nien", "SoHyun", "Xinyu", "Mayu", "Lynn", "JooBin", "Hayeon", "Shion", "ChaeWon", "Sullin", "SeoAh", "JiYeon"],
+    "fromis_9": ["Saerom", "Hayoung", "Gyuri", "Jiwon", "Jisun", "Seoyeon", "Chaeyoung", "Nagyung", "Jiheon"],
+    "FIFTY FIFTY": ["Keena", "Chanelle", "Yewon", "Hana", "Athena"],
+    "KISS OF LIFE": ["Julie", "Natty", "Belle", "Haneul"],
+    "STAYC": ["Sumin", "Sieun", "Isa", "Seeun", "Yoon", "J"],
+    "APINK": ["Chorong", "Bomi", "Eunji", "Naeun", "Namjoo", "Hayoung"],
+    "MAMAMOO": ["Solar", "Moonbyul", "Wheein", "Hwasa"],
+    "CLC": ["Seunghee", "Yujin", "Seungyeon", "Sorn", "Yeeun", "Elkie", "Eunbin"],
+    "AOA": ["Choa", "Jimin", "Yuna", "Hyejeong", "Mina", "Seolhyun", "Chanmi"],
+    "2NE1": ["Bom", "Dara", "CL", "Minzy"],
+    "hearts2hearts": ["Member A", "Member B", "Member C", "Member D"], 
+    "KiiiKii": ["Member 1", "Member 2", "Member 3", "Member 4"]
+};
 
 const TASKS = [
-    {t:"唱一位【女歌手】的歌", n:1, v:"zy"},
-    {t:"唱一位【男歌手】的歌", n:1, v:"zy"},
-    {t:"唱一個【團體】的歌", n:1, v:"zy"},
-    {t:"【隨意唱】一首歌", n:1, v:""},
-    {t:"歌名要有數字：", n:2, v:"num"},
-    {t:"歌曲【非中文】(外語歌)", n:2, v:""},
-    {t:"歌名【非中文】", n:2, v:""},
-    {t:"上一首歌字尾【注音】接龍", n:2, v:""},
-    {t:"唱【上一個人唱的歌手】", n:3, v:""},
-    {t:"歌名【5-6個字】", n:3, v:"zy"},
-    {t:"歌名【3-4個字】", n:3, v:"zy"},
-    {t:"歌名【1-2個字】", n:3, v:"zy"},
-    {t:"歌名【7個字以上】", n:3, v:"zy"},
-    {t:"【默背】整首歌 (不看歌詞)", n:4, v:""},
-    {t:"【合唱】一首歌", n:4, v:"zy"},
-    {t:"【歌詞猜謎】這句歌詞是哪首歌？", n:3, v:"lyrics"}
+    {t:"唱一位【女歌手】的歌", n:1}, {t:"唱一位【男歌手】的歌", n:1}, {t:"唱一個【團體】的歌", n:1},
+    {t:"歌名要有數字：", n:2, v:"num"}, {t:"歌曲【非中文】", n:2}, {t:"歌名【非中文】", n:2},
+    {t:"上一首歌字尾【注音】接龍", n:2, v:"zy"}, {t:"唱【上一個人唱的歌手】", n:3},
+    {t:"歌名【5-6個字】", n:3}, {t:"歌名【1-2個字】", n:3}, {t:"【默背】整首歌 (不看歌詞)", n:4},
+    {t:"【合唱】一首歌", n:4}, {t:"🎵 猜歌挑戰", n:3, v:"lyric"}
 ];
 
-const CARDS_RAW = [
-    null,
-    {id:1, r:"UR", n:"召喚黑暗大法師!!!", d:"蒐集1-50號卡片，直接勝利!!"},
-    {id:2, r:"UR", n:"零幀起手怎麼防", d:"需低於0分才可使用，雙方分數相加並隨機分配"},
-    {id:3, r:"UR", n:"手牌抹殺", d:"雙方捨棄身上所有卡片，重新抽取相同數量的卡片"},
-    {id:4, r:"UR", n:"你不需要這樣吼叫，黑崎一護", d:"隨機扣除對方[10]張卡片"},
-    {id:5, r:"UR", n:"好時代，來臨力", d:"隨機獲得[10]張卡片"},
-    {id:6, r:"SSR", n:"會贏喔", d:"分數低於對手時，對方分數變[1/2]倍"},
-    {id:7, r:"SSR", n:"大哥沒有輸", d:"分數低於對手時，自己分數變[2]倍"},
-    {id:8, r:"SSR", n:"所以我說那個醬汁呢", d:"對方此次挑戰失敗"},
-    {id:9, r:"SSR", n:"領域展開", d:"下一張使用的卡片效果加倍"},
-    {id:10, r:"SSR", n:"だが断る", d:"對方使用的1張卡片效果失效"},
-    {id:11, r:"SSR", n:"不是喔不是這樣子", d:"對方發動增加自身分數的技能時，增加到我方身上"},
-    {id:12, r:"SSR", n:"神聖彗星反射力量", d:"對方發動扣除我方分數的技能時，扣到對方自己身上"},
-    {id:13, r:"SSR", n:"我禿了，也變強了", d:"扣除所有歌手，每有一位增加[200]分"},
-    {id:14, r:"SSR", n:"你從什麼時候開始產生了我沒使用鏡花水月的錯覺？", d:"讓對方自動使用[1]張隨機卡片"},
-    {id:15, r:"SSR", n:"安妮亞喜歡這個", d:"獲得[1000]分"},
-    {id:16, r:"SR", n:"16蹲", d:"有5位相同團體歌手時，扣除這五位歌手，增加[1600]分，對方扣[800]分"},
-    {id:17, r:"SR", n:"下面一位", d:"重抽一次挑戰 (需在挑戰中)"},
-    {id:18, r:"SR", n:"坐阿~萊納", d:"獲得[1]張卡，須立即使用，否則扣500分"},
-    {id:19, r:"SR", n:"我叫你吹", d:"讓對手幫你完成此次挑戰，完成後使用者除了原有獎勵外額外獲得[200]分，失敗則對方扣除[500]分 (需在挑戰中)"},
-    {id:20, r:"SR", n:"你說...什麼...?", d:"扣除對方[5]位隨機歌手"},
-    {id:21, r:"SR", n:"左手換盾，右手換劍", d:"雙方隨機交換[1]張卡片"},
-    {id:22, r:"SR", n:"古蹟抽菸", d:"扣500分，隨機獲得[1]張對手卡片"},
-    {id:23, r:"SR", n:"本來要大跳的", d:"接替對方的此次挑戰，成功後獲得挑戰獎勵外，另外獲得男歌手'王ADEN'"},
-    {id:24, r:"SR", n:"不行還不能笑", d:"對方每有一張卡片，扣除對方[100]分"},
-    {id:25, r:"SR", n:"Superidol的笑容", d:"對方每有一張卡片，增加我方[100]分"},
-    {id:26, r:"SR", n:"光之護封劍", d:"對方暫停挑戰一次"},
-    {id:27, r:"SR", n:"強欲之壺", d:"隨機獲得[2]張卡片"},
-    {id:28, r:"SR", n:"嘉明的味道", d:"從對手獲得[150]分"},
-    {id:29, r:"SR", n:"我的豆花~30塊", d:"扣除對手[300]分"},
-    {id:30, r:"SR", n:"挖庫挖庫", d:"獲得[300]分"},
-    {id:31, r:"R", n:"露比醬，嗨!", d:"對方每有一位女歌手，扣[100]分"},
-    {id:32, r:"R", n:"自己掰開", d:"對方每有一位男歌手，扣[100]分"},
-    {id:33, r:"R", n:"那一天的憂鬱~憂鬱起來", d:"對方每有一位團體歌手，扣[100]分"},
-    {id:34, r:"R", n:"聽你這麼說你很勇喔", d:"查看對方目前的卡片數以及等級"},
-    {id:35, r:"R", n:"讓我看看你發育正不正常", d:"查看對方目前的所有歌手"},
-    {id:36, r:"R", n:"我全都要", d:"三個種類都有歌手時，每個種類各增加[1]位歌手"},
-    {id:37, r:"R", n:"來都來了", d:"我方扣除1名女歌手，對方扣除[3]名男歌手"},
-    {id:38, r:"R", n:"我老爸得了MVP!", d:"我方扣除1名男歌手，對方扣除[3]名女歌手"},
-    {id:39, r:"R", n:"我要驗牌", d:"分數落後時，獲得[1]張卡"},
-    {id:40, r:"R", n:"高處", d:"分數領先時，獲得[1]張卡"},
-    {id:41, r:"R", n:"勝者的早餐", d:"隨機獲得[2]位輸入過的女歌手"},
-    {id:42, r:"R", n:"男上加男", d:"隨機獲得[2]位輸入過的男歌手"},
-    {id:43, r:"R", n:"右手進牌", d:"隨機獲得[1]張卡片"},
-    {id:44, r:"R", n:"哥布林·一起·強大", d:"蒐集5張可獲得[1]張隨機更高級卡片"},
-    {id:45, r:"R", n:"因為我們是妖精尾巴", d:"有5位相同歌手時增加[500]分"},
-    {id:46, r:"R", n:"你後面有車", d:"分數低於0分時扣除對方[200]分"},
-    {id:47, r:"R", n:"本斥但大", d:"分數低於0分時獲得[200]分"},
-    {id:48, r:"R", n:"嚴厲斥責", d:"從對手獲得[50]分"},
-    {id:49, r:"R", n:"現在是匆匆忙忙，連滾帶爬", d:"扣除對手[100]分"},
-    {id:50, r:"R", n:"本來應該從從容容，游刃有餘", d:"獲得[100]分"}
+const LYRICS = [
+    {q:"天灰灰 會不會 讓我忘了你是誰", a:"世界末日"}, {q:"愛你孤身走暗巷 愛你不跪的模樣", a:"孤勇者"},
+    {q:"Super Lady! (I got a superpower)", a:"Super Lady"}, {q:"Queencard I'm hot, My boob and booty is hot", a:"Queencard"}
 ];
 
-// ==================== 核心變數 ====================
+// ==================== 狀態與初始化 ====================
+let myName = "", myRoom = "", collection = {}, singers = { m: [], f: [], g: [] }, currentTask = null, isExchangeMode = false;
+
 const firebaseConfig = { apiKey: "AIzaSyBjYdhxIQ_LGoNHiAkygjkIqWsb8NgF0s8", authDomain: "ktv-game.firebaseapp.com", databaseURL: "https://ktv-game-default-rtdb.asia-southeast1.firebasedatabase.app", projectId: "ktv-game", storageBucket: "ktv-game.firebasestorage.app", messagingSenderId: "903538372328", appId: "1:903538372328:web:2456e55fcd41f0899f635d" };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-let myName="", myRoom="", inventory={}, scoutInv={}, totalHistory=[], currentTask=null;
-let roomPlayers = {};
-let doubleNext = false;
-let globalHistory = []; 
-let isIntercepting = false; // V61 攔截任務標記
+function initGame() {
+    myName = document.getElementById('inName').value.trim();
+    myRoom = document.getElementById('inRoom').value.trim();
+    if (!myName || !myRoom) return alert("請填寫資訊");
 
-// ==================== 核心功能 ====================
-function initGame(){
-    myName=document.getElementById('inName').value.trim();
-    myRoom=document.getElementById('inRoom').value.trim();
-    if(!myName||!myRoom) return;
-    
-    inventory = JSON.parse(localStorage.getItem(`v61_inv_${myName}`)) || {};
-    scoutInv = JSON.parse(localStorage.getItem(`v61_scout_${myName}`)) || {};
-    totalHistory = JSON.parse(localStorage.getItem(`v61_history_${myName}`)) || [];
-    doubleNext = JSON.parse(localStorage.getItem(`v61_double_${myName}`)) || false;
-    
-    document.getElementById('display-name').innerText=myName;
-    document.getElementById('display-room').innerText=myRoom;
-    document.getElementById('ui-header').style.display='block';
-    
-    // 註冊玩家與同步
-    db.ref(`rooms/${myRoom}/players/${myName}`).update({ 
-        name: myName, score: 0, lastActive: Date.now() 
-    });
+    collection = JSON.parse(localStorage.getItem(`v66_col_${myName}`)) || {};
+    singers = JSON.parse(localStorage.getItem(`v66_sin_${myName}`)) || { m: [], f: [], g: [] };
 
-    // 監聽房間玩家資料
-    db.ref(`rooms/${myRoom}/players`).on('value', s => {
-        roomPlayers = s.val() || {};
-        updatePlayerUI();
-        
-        globalHistory = [];
-        for(let p in roomPlayers) {
-            if(roomPlayers[p].history) globalHistory.push(...roomPlayers[p].history);
-        }
-    });
+    document.getElementById('display-name').innerText = myName;
+    document.getElementById('display-room').innerText = myRoom;
+    document.getElementById('ui-header').style.display = 'flex';
 
-    // *** 監聽動作事件 (反制系統核心) ***
-    db.ref(`rooms/${myRoom}/actions/${myName}`).on('child_added', s => {
-        const action = s.val();
-        handleIncomingAction(s.key, action);
-    });
+    db.ref(`rooms/${myRoom}/players/${myName}`).update({ name: myName, lastActive: Date.now() });
+    db.ref(`rooms/${myRoom}/players`).on('value', snap => updateRanking(snap.val()));
 
-    // V61: 監聽全局事件 (用於任務攔截)
-    db.ref(`rooms/${myRoom}/global_actions`).on('child_added', s => {
-        const act = s.val();
-        // 忽略自己發的 & 忽略過舊的
-        if(act.source !== myName && (Date.now() - act.ts) < 5000) {
-            handleGlobalAction(act);
-        }
-        // 清理 (只清理過期的，防止刪掉別人剛發的)
-        if((Date.now() - act.ts) > 10000) s.ref.remove(); 
-    });
-
-    // 監聽自己的通知
-    db.ref(`rooms/${myRoom}/notifications/${myName}`).on('child_added', s => {
-        showPopToast(s.val().msg, s.val().type || 'info');
-        s.ref.remove();
-    });
-    
-    syncMyData();
-    showPage('page-home'); updateScoutUI();
+    // 確保初始化時渲染
+    renderCollection(); 
+    showPage('page-home');
+    syncData();
 }
 
-function syncMyData(){
-    db.ref(`rooms/${myRoom}/players/${myName}`).update({
-        scoutInv: scoutInv,
-        history: totalHistory
-    });
-    localStorage.setItem(`v61_inv_${myName}`, JSON.stringify(inventory));
-}
-
-// ==================== 任務系統 ====================
-function prepareAndStartTask() {
-    generateTask();
-}
-
-function generateTask(){
-    currentTask = TASKS[Math.floor(Math.random()*TASKS.length)];
-    let taskText = currentTask.t;
-    let extra = "";
+function syncData() {
+    let comp = 0;
+    for(let g in GIRL_GROUPS) if(GIRL_GROUPS[g].every(m => collection[`${g}_${m}`])) comp++;
     
-    if(currentTask.v === "num") extra = Math.floor(Math.random()*10);
-    else if(currentTask.v === "zy") extra = ZHUYIN[Math.floor(Math.random()*ZHUYIN.length)];
-    else if(currentTask.v === "lyrics") {
-        const line = LYRICS_DB[Math.floor(Math.random()*LYRICS_DB.length)];
-        extra = line.l;
-        taskText += ` (${line.l})`;
+    const uniqueCount = getUniqueSingerCount();
+    document.getElementById('total-groups-completed').innerText = `${comp} 👑`;
+    document.getElementById('unique-singer-count').innerText = `${uniqueCount} 位不重複`;
+
+    const exBtn = document.getElementById('btn-singer-exchange');
+    exBtn.style.display = uniqueCount >= 10 ? 'block' : 'none';
+
+    renderHomeSingers();
+
+    db.ref(`rooms/${myRoom}/players/${myName}`).update({ completedGroups: comp, cardCount: Object.values(collection).reduce((a,b)=>a+b, 0) });
+    localStorage.setItem(`v66_col_${myName}`, JSON.stringify(collection));
+    localStorage.setItem(`v66_sin_${myName}`, JSON.stringify(singers));
+    
+    // 每次同步數據也刷新蒐集冊
+    renderCollection();
+}
+
+function renderHomeSingers() {
+    const list = document.getElementById('home-singer-list');
+    list.innerHTML = "";
+    const counts = {};
+    ['m', 'f', 'g'].forEach(type => {
+        singers[type].forEach(name => {
+            if(!counts[name]) counts[name] = { type: type, count: 0 };
+            counts[name].count++;
+        });
+    });
+    for(let name in counts) {
+        const item = counts[name];
+        list.innerHTML += `<div class="tag-display ${item.type}">${name} x${item.count}</div>`;
     }
+}
 
-    // V61: 廣播「開始任務」，讓持有 #23 的人可以攔截
-    db.ref(`rooms/${myRoom}/global_actions`).push({
-        type: 'task_start',
-        source: myName,
-        taskData: currentTask,
-        taskDesc: taskText,
-        taskExtra: extra,
-        ts: Date.now()
-    });
+function getUniqueSingerCount() {
+    const s = new Set([...singers.m, ...singers.f, ...singers.g]);
+    return s.size;
+}
 
-    db.ref(`rooms/${myRoom}/players/${myName}/currentTask`).set({
-        desc: taskText, extra: extra, rewardN: currentTask.n
-    });
+// ==================== 任務流程 ====================
+function startTask() {
+    const t = TASKS[Math.floor(Math.random() * TASKS.length)];
+    let extra = "";
+    if(t.v === "num") extra = Math.floor(Math.random() * 10);
+    else if(t.v === "zy") extra = "ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙㄧㄨㄩㄚㄛㄜㄝㄞㄟㄠㄡㄢㄣㄤㄥㄦ"[Math.floor(Math.random()*37)];
+    else if(t.v === "lyric") { const l = LYRICS[Math.floor(Math.random()*LYRICS.length)]; extra = `"${l.q}"`; t.ans = l.a; }
 
-    displayTask(taskText, extra, currentTask.n);
-    isIntercepting = false; // 這是自己抽的
+    currentTask = { ...t, extra };
+    document.getElementById('task-desc').innerText = t.t;
+    document.getElementById('task-extra').innerText = extra;
+    document.getElementById('task-reward').innerText = `獎勵：${t.n} 張卡片`;
     showPage('page-challenge');
 }
 
-function displayTask(text, extra, rewardN) {
-    document.getElementById('task-text').innerText = text;
-    document.getElementById('extra-box').innerText = extra;
-    document.getElementById('task-reward').innerText = `獎勵：${rewardN} 張卡片`;
-}
-
-// V61: 處理全域事件 (主要用於 #23 攔截)
-function handleGlobalAction(act) {
-    if (act.type === 'task_start') {
-        // 如果我有 #23，跳出詢問
-        if (inventory[23] > 0) {
-            const confirmIntercept = confirm(`對手 ${act.source} 抽取了挑戰：\n${act.taskDesc}\n\n你要發動 #23【本來要大跳的】來搶奪這個挑戰嗎？`);
-            if (confirmIntercept) {
-                // 發動攔截
-                consumeCard(23);
-                
-                // 設定自己的任務
-                currentTask = act.taskData;
-                isIntercepting = true; // 標記為攔截任務
-                displayTask(act.taskDesc, act.taskExtra, currentTask.n);
-                
-                // 通知對方任務被搶了
-                sendAction(act.source, 'intercept_success', { by: myName });
-                
-                // 進入挑戰頁面
-                showPage('page-challenge');
-                showPopToast("🏃 已成功發動 #23 搶奪任務！完成後可獲得【王ADEN】！", "warn");
-            }
-        }
-    }
-}
-
-// ==================== 卡片與戰鬥邏輯 ====================
-
-function getVal(text, base) {
-    const match = text.match(/\[(\d+)\]/);
-    let val = match ? parseInt(match[1]) : base;
-    if (doubleNext) {
-        val *= 2;
-        doubleNext = false;
-        localStorage.setItem(`v61_double_${myName}`, false);
-        showPopToast("⚡ 領域展開！效果數值加倍！", "warn");
-    }
-    return val;
-}
-
-function getMultiplier(text, defaultMul) {
-    let mul = defaultMul;
-    const match = text.match(/\[(\d+\.?\d*|\d+\/\d+)\]/);
-    if(match) {
-        if(match[1].includes('/')) {
-            let parts = match[1].split('/');
-            mul = parseInt(parts[0]) / parseInt(parts[1]);
-        } else {
-            mul = parseFloat(match[1]);
-        }
-    }
+function rerollTask() {
+    const all = [...singers.m, ...singers.f, ...singers.g];
+    if(all.length < 1) return alert("沒有歌手可以消耗");
+    const rand = Math.floor(Math.random() * all.length);
+    const target = all[rand];
     
-    if (doubleNext) {
-        mul *= 2; 
-        doubleNext = false;
-        localStorage.setItem(`v61_double_${myName}`, false);
-        showPopToast("⚡ 領域展開！倍率加倍！", "warn");
-    }
-    return mul;
+    if(singers.m.includes(target)) { singers.m.splice(singers.m.indexOf(target), 1); }
+    else if(singers.f.includes(target)) { singers.f.splice(singers.f.indexOf(target), 1); }
+    else if(singers.g.includes(target)) { singers.g.splice(singers.g.indexOf(target), 1); }
+    
+    syncData();
+    showToast(`消耗了 1 次 ${target}`);
+    startTask();
 }
 
-function sendAction(target, type, data) {
-    db.ref(`rooms/${myRoom}/actions/${target}`).push({
-        source: myName,
-        type: type, 
-        data: data,
-        ts: Date.now()
+function redeemSingers() {
+    const uniqueNames = [...new Set([...singers.m, ...singers.f, ...singers.g])];
+    if(uniqueNames.length < 10) return;
+    if(!confirm("確定要消耗 10 位不同歌手的計數，換取 2 張卡片嗎？")) return;
+    
+    uniqueNames.slice(0, 10).forEach(name => {
+        if(singers.m.includes(name)) singers.m.splice(singers.m.indexOf(name), 1);
+        else if(singers.f.includes(name)) singers.f.splice(singers.f.indexOf(name), 1);
+        else if(singers.g.includes(name)) singers.g.splice(singers.g.indexOf(name), 1);
     });
+
+    syncData();
+    drawCards(2);
+    showToast("兌換成功！");
 }
 
-function sendNotification(target, msg, type='info') {
-    db.ref(`rooms/${myRoom}/notifications/${target}`).push({msg: msg, type: type});
+function goToSettlement() {
+    if(currentTask.v === "lyric") {
+        const a = prompt("請輸入歌名：");
+        if(!a || !a.includes(currentTask.ans)) return alert("答案錯誤");
+    }
+    document.getElementById('singer-input-container').innerHTML = "";
+    addSingerInputRow();
+    showPage('page-settle');
 }
 
-// 處理接收到的動作 (V61 修正版)
-function handleIncomingAction(key, action) {
-    const { source, type, data } = action;
-    const ref = db.ref(`rooms/${myRoom}/actions/${myName}/${key}`);
+// ==================== 歌手登錄結算 (V66 智慧標籤) ====================
+function addSingerInputRow() {
+    const container = document.getElementById('singer-input-container');
+    const rowId = Date.now() + Math.random().toString(36).substr(2, 5);
+    const div = document.createElement('div');
+    div.className = "singer-input-row";
+    div.id = `row-${rowId}`;
+    div.dataset.type = "m"; 
+
+    div.innerHTML = `
+        <div class="type-select">
+            <div id="btn-m-${rowId}" class="type-opt m active" onclick="setRowType('${rowId}', 'm')">男</div>
+            <div id="btn-f-${rowId}" class="type-opt f" onclick="setRowType('${rowId}', 'f')">女</div>
+            <div id="btn-g-${rowId}" class="type-opt g" onclick="setRowType('${rowId}', 'g')">團體</div>
+        </div>
+        <input type="text" class="input-field" placeholder="輸入歌手名稱..." id="input-${rowId}">
+        <div class="history-tags-area" id="tags-${rowId}"></div>
+    `;
+    container.appendChild(div);
+    renderAllHistoryTags(rowId);
+}
+
+// 顯示所有歷史標籤 (不再過濾，直接顯示並支援自動切換)
+function renderAllHistoryTags(rowId) {
+    const container = document.getElementById(`tags-${rowId}`);
+    container.innerHTML = "";
+
+    const allTags = [];
+    // 收集所有標籤並標記類型
+    singers.m.forEach(n => allTags.push({name:n, type:'m'}));
+    singers.f.forEach(n => allTags.push({name:n, type:'f'}));
+    singers.g.forEach(n => allTags.push({name:n, type:'g'}));
     
-    let counterOptions = [];
-    
-    // 1. 萬用反制 #10 (可反制幾乎所有負面效果 + 對方Buff)
-    // V61: 確保所有負面效果都能被 #10 偵測
-    if (inventory[10]) {
-        if (['dmg', 'steal_score', 'steal_card', 'remove_card_random', 'remove_singer', 'force_use', 'opp_buff', 'counter_buff_stolen', 'singer_debuff'].includes(type)) {
-            counterOptions.push({id: 10, name: "だが断る", desc: "使對方卡片失效"});
-        }
-    }
-
-    // 2. 反射傷害 #12 (僅限純 'dmg')
-    // V61: 嚴格定義，'counter_buff_stolen' (被反制搶分) 不算傷害，不能反射
-    if (type === 'dmg' && inventory[12]) {
-        counterOptions.push({id: 12, name: "神聖彗星反射力量", desc: "將扣分反彈給對方"});
-    }
-
-    // 3. 搶奪Buff #11 (僅限 'opp_buff')
-    if (type === 'opp_buff' && inventory[11]) {
-        counterOptions.push({id: 11, name: "不是喔不是這樣子", desc: `將對方增加的 ${data.val} 分轉移給我`});
-    }
-
-    // 如果有反制選項
-    if (counterOptions.length > 0) {
-        let title = `⚠️ 觸發反制機會！`;
-        let msg = `來自 ${source} 的行動：${getDesc(type, data)}`;
-        
-        let btnHtml = counterOptions.map(c => 
-            `<button class="btn-counter" onclick="executeCounter('${key}', ${c.id}, '${source}', '${type}')">發動【${c.name}】<br><span style="font-size:10px;">${c.desc}</span></button>`
-        ).join('');
-        
-        let cancelText = (type === 'opp_buff') ? "不反制 (對方成功加分)" : "不反制，承受效果";
-        
-        btnHtml += `<button class="btn-sec" onclick="acceptAction('${key}')">${cancelText}</button>`;
-
-        showAlert(title, msg, btnHtml);
-    } else {
-        // 無反制，直接執行
-        executeActionEffect(action);
-        ref.remove();
-    }
-}
-
-function getDesc(type, data) {
-    if(type==='dmg') return `扣除你 ${data.val} 分`;
-    if(type==='steal_score') return `偷取你 ${data.val} 分`;
-    if(type==='steal_card') return `偷取 ${data.val} 張卡`;
-    if(type==='remove_card_random') return `移除你 ${data.val} 張卡片`;
-    if(type==='remove_singer') return `移除歌手`;
-    if(type==='effect') return `特殊效果`;
-    if(type==='opp_buff') return `對方增加了 ${data.val} 分`;
-    if(type==='counter_buff_stolen') return `對方發動技能搶奪你的加分 (${data.val}分)`; // V61
-    if(type==='force_use') return `強制你使用一張卡片`;
-    if(type==='singer_debuff') return `依據 ${data.filterType} 歌手數量扣分 (每位 ${data.val} 分)`;
-    if(type==='intercept_success') return `搶奪了你的任務！`;
-    return '未知效果';
-}
-
-function acceptAction(key) {
-    db.ref(`rooms/${myRoom}/actions/${myName}/${key}`).once('value', s => {
-        if(s.exists()) {
-            executeActionEffect(s.val());
-            s.ref.remove();
-        }
-    });
-    document.getElementById('alert-modal').style.display='none';
-}
-
-function executeCounter(key, cardId, source, type) {
-    consumeCard(cardId);
-    
-    db.ref(`rooms/${myRoom}/actions/${myName}/${key}`).once('value', s => {
-        const act = s.val();
-        
-        if (cardId === 10) { // 無效化
-            sendNotification(source, `❌ 你的行動被 ${myName} 使用【だが断る】無效化了！`, 'error');
-            // 若我是因為被搶分而發動 #10，代表我保住了分數，什麼都不用做 (counter_buff_stolen 的效果被取消)
-            // 若我是針對對方 opp_buff 發動 #10，代表對方加分無效 -> 扣除對方分數
-            if (type === 'opp_buff') {
-                sendAction(source, 'dmg', {val: act.data.val, reason: 'counter_buff_cancel'});
-            }
-        } 
-        else if (cardId === 12) { // 反射 (僅dmg)
-            sendAction(source, 'dmg', {val: act.data.val, reason: 'reflect'});
-            sendNotification(source, `↩️ 你的攻擊被 ${myName} 反射回來了！`, 'error');
-        } 
-        else if (cardId === 11) { // 奪取Buff (僅opp_buff)
-            // 我獲得加分
-            updateScore(myName, act.data.val);
-            // 對方收到 "被搶分" 的特殊負面效果 (非 dmg，所以不能用 #12)
-            sendAction(source, 'counter_buff_stolen', {val: act.data.val});
-            sendNotification(source, `😲 你的加分被 ${myName} 搶走了！`, 'error');
+    // 去重 (取最新的類型)
+    const uniqueTags = [];
+    const seen = new Set();
+    // 反向遍歷以保留最新，但這裡簡單用 Set 去重
+    allTags.forEach(t => {
+        if(!seen.has(t.name)) {
+            uniqueTags.push(t);
+            seen.add(t.name);
         }
     });
 
-    db.ref(`rooms/${myRoom}/actions/${myName}/${key}`).remove();
-    document.getElementById('alert-modal').style.display='none';
-    openCollection();
-}
-
-function executeActionEffect(action) {
-    const { source, type, data } = action;
-    
-    // V61: 確實扣除被搶走的加分
-    if (type === 'counter_buff_stolen') {
-        updateScore(myName, -data.val);
-        showPopToast(`📉 你的加分被 ${source} 搶走了！已扣除 ${data.val} 分`, 'error');
-    }
-    else if (type === 'dmg') {
-        updateScore(myName, -data.val);
-        showPopToast(`💔 被 ${source} 扣除 ${data.val} 分`, 'error');
-    } 
-    else if (type === 'steal_score') {
-        updateScore(myName, -data.val);
-        db.ref(`rooms/${myRoom}/players/${source}/score`).transaction(s => (s||0) + data.val);
-        showPopToast(`💸 被 ${source} 偷走 ${data.val} 分`, 'error');
-    }
-    else if (type === 'steal_card') {
-        const myCards = [];
-        for(let id in inventory) { for(let i=0; i<inventory[id]; i++) myCards.push(id); }
-        if(myCards.length > 0) {
-            let stolenCount = 0;
-            let stolenList = [];
-            for(let i=0; i<data.val; i++) {
-                if(myCards.length === 0) break;
-                const idx = Math.floor(Math.random()*myCards.length);
-                const cId = myCards.splice(idx, 1)[0];
-                consumeCard(cId);
-                stolenList.push(CARDS_RAW[cId].n);
-                db.ref(`rooms/${myRoom}/actions/${source}`).push({source: 'system', type: 'give_card', data: {id: cId}});
-                stolenCount++;
-            }
-            showPopToast(`🃏 被 ${source} 偷走了 ${stolenCount} 張卡片: ${stolenList.join(', ')}`, 'error');
-        } else {
-            sendNotification(source, `對方沒有卡片可以偷！`);
-        }
-    }
-    else if (type === 'remove_card_random') { // V61: #4 效果實裝
-        const myCards = [];
-        for(let id in inventory) { for(let i=0; i<inventory[id]; i++) myCards.push(id); }
-        if(myCards.length > 0) {
-            let removedCount = 0;
-            for(let i=0; i<data.val; i++) {
-                if(myCards.length === 0) break;
-                const idx = Math.floor(Math.random()*myCards.length);
-                const cId = myCards.splice(idx, 1)[0];
-                consumeCard(cId);
-                removedCount++;
-            }
-            showPopToast(`🗑️ 被 ${source} 隨機移除了 ${removedCount} 張卡片！`, 'error');
-        }
-    }
-    else if (type === 'give_card') {
-        addCardToInventory(data.id);
-    }
-    else if (type === 'remove_singer') {
-        removeRandomSingersDeep(data.filterType, data.count);
-        showPopToast(`🗑️ 被 ${source} 移除了 ${data.count} 位歌手！`, 'error');
-    }
-    else if (type === 'singer_debuff') {
-        let totalCount = 0;
-        for(let k in scoutInv) {
-            if(scoutInv[k].type === data.filterType) totalCount += scoutInv[k].count;
-        }
-        if(totalCount > 0) {
-            const loss = totalCount * data.val;
-            updateScore(myName, -loss);
-            showPopToast(`📉 因擁有 ${totalCount} 位 ${data.filterType} 歌手，被扣除 ${loss} 分`, 'error');
-        }
-    }
-    else if (type === 'spy_card') {
-        const info = `卡片數: ${countTotalCards()}\nUR: ${countRarity('UR')}\nSSR: ${countRarity('SSR')}`;
-        sendAction(source, 'show_spy_result', {content: info, title: `偵查報告 (${myName})`});
-        showPopToast(`👀 ${source} 正在觀察你的卡片！`);
-    }
-    else if (type === 'spy_singer') {
-        let report = [];
-        for(let k in scoutInv) report.push(`${k} x${scoutInv[k].count}`);
-        const info = report.length ? report.join('\n') : "無歌手";
-        sendAction(source, 'show_spy_result', {content: info, title: `歌手名單 (${myName})`});
-        showPopToast(`👀 ${source} 正在查看你的歌手！`);
-    }
-    else if (type === 'show_spy_result') {
-        document.getElementById('spy-modal').style.display = 'flex';
-        document.getElementById('spy-content').innerText = `${data.title}\n\n${data.content}`;
-    }
-    else if (type === 'force_use') { // V61: #14 效果實裝
-        const myHand = Object.keys(inventory);
-        if(myHand.length > 0) {
-            const cId = parseInt(myHand[Math.floor(Math.random()*myHand.length)]);
-            showPopToast(`😵 被 ${source} 強制使用卡片：#${cId} ${CARDS_RAW[cId].n}`);
-            // 強制使用，不檢查條件
-            useCard(cId, null, true); 
-        } else {
-            sendNotification(source, `對方沒有卡片可以使用！`);
-        }
-    }
-    else if (type === 'intercept_success') { // V61: 任務被搶
-        currentTask = null;
-        showPage('page-home');
-        alert(`你的任務被 ${data.by} 使用 #23 搶走了！`);
-    }
-}
-
-// 檢查卡片是否可用
-function checkCardUsability(id, target) {
-    const myScore = roomPlayers[myName].score || 0;
-    const oppScore = target ? (roomPlayers[target].score || 0) : 0;
-    
-    // V61: 場景限制
-    const inChallenge = document.getElementById('page-challenge').classList.contains('active');
-    
-    // 需要目標的卡片
-    const card = CARDS_RAW[id];
-    const needsTarget = card.d.includes("對方") || card.d.includes("對手") || card.d.includes("雙方");
-    if(needsTarget && !target && id !== 3) return { ok: false, msg: "需選擇目標" }; 
-
-    switch(id) {
-        case 2: if(myScore >= 0) return { ok: false, msg: "需低於0分" }; break;
-        case 6: if(myScore >= oppScore) return { ok: false, msg: "需分數 < 對手" }; break;
-        case 7: if(myScore >= oppScore) return { ok: false, msg: "需分數 < 對手" }; break;
-        case 16: if(!findSingerByCountAndType('group', 5)) return { ok: false, msg: "需 5 位相同團體" }; break;
-        case 17: if(!inChallenge) return { ok: false, msg: "需在挑戰中使用" }; break; // V61
-        case 19: if(!inChallenge) return { ok: false, msg: "需在挑戰中使用" }; break; // V61
-        case 23: return { ok: false, msg: "被動：對方抽任務時觸發" }; // V61
-        case 39: if(myScore >= oppScore) return { ok: false, msg: "需分數落後" }; break;
-        case 40: if(myScore <= oppScore) return { ok: false, msg: "需分數領先" }; break;
-        case 44: if((inventory[44]||0) < 5) return { ok: false, msg: "需 5 張哥布林" }; break;
-        case 45: if(!findSingerByCountAndType(null, 5)) return { ok: false, msg: "需 5 位相同歌手" }; break;
-        case 46: if(myScore >= 0) return { ok: false, msg: "需分數 < 0" }; break;
-        case 47: if(myScore >= 0) return { ok: false, msg: "需分數 < 0" }; break;
-    }
-    return { ok: true };
-}
-
-// 卡片使用
-async function useCard(id, forcedTarget = null, isForced = false) {
-    if(!inventory[id] && !isForced) return;
-    
-    let target = forcedTarget || document.getElementById('target-dropdown').value;
-    if (!isForced) {
-        const check = checkCardUsability(id, target);
-        if (!check.ok) {
-            alert(`無法使用：${check.msg}`);
-            return;
-        }
-    }
-
-    const card = CARDS_RAW[id];
-    const baseVal = getVal(card.d, 0);
-    let selfGainScore = 0;
-
-    switch(id) {
-        case 1: 
-            let hasAll = true; for(let i=1; i<=50; i++) if(!inventory[i]) hasAll = false;
-            if(hasAll) { alert("WINNER!"); db.ref(`rooms/${myRoom}/winner`).set(myName); } break;
-        case 2: 
-            const total = (roomPlayers[myName].score||0) + (roomPlayers[target].score||0);
-            const myNew = Math.floor(Math.random()*total);
-            updateScore(myName, myNew, true);
-            const targetNew = total - myNew;
-            const diff = (roomPlayers[target].score || 0) - targetNew; 
-            if(diff > 0) sendAction(target, 'dmg', {val: diff});
-            else sendAction(target, 'steal_score', {val: -diff});
-            break;
-        case 3: 
-            const myCount = countTotalCards();
-            inventory = {}; executeBatchDraw(myCount);
-            if(target) sendAction(target, 'effect', {subType: 'hand_wipe'}); break;
-        case 4: if(target) sendAction(target, 'remove_card_random', {val: baseVal}); break; // V61: 修正類型
-        case 5: executeBatchDraw(baseVal); break;
-        case 6: 
-             const oppScore6 = roomPlayers[target].score || 0;
-             const mul6 = getMultiplier(card.d, 0.5);
-             const lost6 = Math.floor(oppScore6 * (1-mul6));
-             sendAction(target, 'dmg', {val: lost6}); break;
-        case 7: 
-             const mul7 = getMultiplier(card.d, 2);
-             const current7 = roomPlayers[myName].score||0;
-             const gain7 = current7*(mul7-1);
-             updateScore(myName, gain7);
-             selfGainScore = gain7; break;
-        case 8: if(target) sendNotification(target, "❌ 你的此次挑戰被判定失敗！", 'error'); break;
-        case 9: doubleNext = true; localStorage.setItem(`v61_double_${myName}`, true); showPopToast("⚡ 下一張卡片效果加倍！"); break;
-        case 10: alert("此卡為被動反制卡"); return; 
-        case 11: alert("此卡為被動反制卡"); return;
-        case 12: alert("此卡為被動反制卡"); return;
-        case 13: 
-            let sCount = 0; for(let k in scoutInv) sCount += scoutInv[k].count;
-            scoutInv={}; syncMyData(); updateScoutUI();
-            const gain13 = sCount * baseVal;
-            updateScore(myName, gain13);
-            selfGainScore = gain13; break;
-        case 14: if(target) sendAction(target, 'force_use', {}); break; // V61: 修正類型
-        case 15: updateScore(myName, baseVal); selfGainScore = baseVal; break;
-        case 16: 
-             let groupC = findSingerByCountAndType('group', 5);
-             if(groupC) {
-                 delete scoutInv[groupC]; syncMyData(); updateScoutUI();
-                 updateScore(myName, 1600); selfGainScore = 1600;
-                 if(target) sendAction(target, 'dmg', {val: 800});
-             } break;
-        case 17: generateTask(); break; // V61: 需在挑戰頁使用
-        case 18: 
-             const rid = Math.floor(Math.random()*50)+1;
-             alert(`抽到 #${rid}，強制使用！`); useCard(rid, target, true); break;
-        case 19: if(target) sendNotification(target, `💨 請幫 ${myName} 完成任務：${currentTask.t}`); break;
-        case 20: if(target) sendAction(target, 'remove_singer', {count: baseVal}); break;
-        case 21: if(inventory[id]>0) { inventory[id]--; executeBatchDraw(1); } if(target) sendAction(target, 'effect', {text: "交換卡片"}); break; 
-        case 22: updateScore(myName, -500); if(target) sendAction(target, 'steal_card', {val: 1}); break;
-        case 23: alert("此卡為被動觸發，當對方抽任務時會詢問"); return; // V61: 被動邏輯在 handleGlobalAction
-        case 24: if(target) sendNotification(target, `對方發動 #24，請根據卡片數每張扣 100 分！`); break;
-        case 25: updateScore(myName, 500); selfGainScore = 500; break;
-        case 26: if(target) sendNotification(target, "⏸️ 暫停挑戰一次！"); break;
-        case 27: executeBatchDraw(baseVal); break;
-        case 28: if(target) { updateScore(myName, baseVal); sendAction(target, 'dmg', {val: baseVal}); selfGainScore = baseVal; } break;
-        case 29: if(target) sendAction(target, 'dmg', {val: baseVal}); break;
-        case 30: updateScore(myName, baseVal); selfGainScore = baseVal; break;
-        case 31: if(target) sendAction(target, 'singer_debuff', {val: baseVal, filterType: 'female'}); break;
-        case 32: if(target) sendAction(target, 'singer_debuff', {val: baseVal, filterType: 'male'}); break;
-        case 33: if(target) sendAction(target, 'singer_debuff', {val: baseVal, filterType: 'group'}); break;
-        case 34: if(target) sendAction(target, 'spy_card', {}); break;
-        case 35: if(target) sendAction(target, 'spy_singer', {}); break;
-        case 36: 
-             addScout(getSingersFromHistoryUniqueFirst('male', 1)[0], 'male', 1);
-             addScout(getSingersFromHistoryUniqueFirst('female', 1)[0], 'female', 1);
-             addScout(getSingersFromHistoryUniqueFirst('group', 1)[0], 'group', 1); break;
-        case 37: removeRandomMySinger('female', 1); if(target) sendAction(target, 'remove_singer', {count: 3, filterType: 'male'}); break;
-        case 38: removeRandomMySinger('male', 1); if(target) sendAction(target, 'remove_singer', {count: 3, filterType: 'female'}); break;
-        case 39: executeBatchDraw(1); break;
-        case 40: executeBatchDraw(1); break;
-        case 41: 
-             const fList = getSingersFromHistoryUniqueFirst('female', 2);
-             fList.forEach(n => addScout(n, 'female', 1)); break;
-        case 42: 
-             const mList = getSingersFromHistoryUniqueFirst('male', 2);
-             mList.forEach(n => addScout(n, 'male', 1)); break;
-        case 43: executeBatchDraw(baseVal); break;
-        case 44: alert("請按上方綠色按鈕合成"); return;
-        case 45: if(findSingerByCountAndType(null, 5)) { updateScore(myName, baseVal); selfGainScore = baseVal; } break;
-        case 46: if(target) sendAction(target, 'dmg', {val: baseVal}); break;
-        case 47: updateScore(myName, baseVal); selfGainScore = baseVal; break;
-        case 48: if(target) { updateScore(myName, baseVal); sendAction(target, 'dmg', {val: baseVal}); selfGainScore = baseVal; } break;
-        case 49: if(target) sendAction(target, 'dmg', {val: baseVal}); break;
-        case 50: updateScore(myName, baseVal); selfGainScore = baseVal; break;
-    }
-
-    // 廣播加分，觸發對手 #11
-    if (selfGainScore > 0) {
-        for(let p in roomPlayers) {
-            if(p !== myName) {
-                sendAction(p, 'opp_buff', {val: selfGainScore});
-            }
-        }
-    }
-
-    consumeCard(id);
-    closeModal();
-    openCollection();
-}
-
-// ==================== 輔助功能 ====================
-
-function updateScore(who, delta, isSet=false) {
-    db.ref(`rooms/${myRoom}/players/${who}/score`).transaction(current => {
-        const final = isSet ? delta : (current || 0) + delta;
-        return final;
-    }, (err, committed, s) => {
-        if(committed && !isSet && delta !== 0 && who === myName) {
-            const msg = delta > 0 ? `分數增加 ${delta}` : `分數減少 ${Math.abs(delta)}`;
-            const type = delta > 0 ? 'success' : 'error';
-            showPopToast(msg, type);
-        }
+    // 只顯示前 20 個 (可根據需求調整)
+    uniqueTags.slice(0, 20).forEach(tag => {
+        const span = document.createElement('span');
+        span.className = `quick-tag t-${tag.type}`;
+        span.innerText = tag.name;
+        // 點擊：填入名字 + 自動切換類型
+        span.onclick = () => {
+            document.getElementById(`input-${rowId}`).value = tag.name;
+            setRowType(rowId, tag.type);
+        };
+        container.appendChild(span);
     });
 }
 
-function getSingersFromHistoryUniqueFirst(type, count) {
-    const candidates = globalHistory.filter(h => h.split('|')[1] === type).map(h => h.split('|')[0]);
-    if(candidates.length === 0) return Array(count).fill(type === 'male' ? "周杰倫" : (type === 'female' ? "蔡依林" : "五月天"));
+window.setRowType = function(rowId, type) {
+    const row = document.getElementById(`row-${rowId}`);
+    if(!row) return;
+    row.dataset.type = type;
+    row.querySelector('.type-opt.m').classList.remove('active');
+    row.querySelector('.type-opt.f').classList.remove('active');
+    row.querySelector('.type-opt.g').classList.remove('active');
+    row.querySelector(`.type-opt.${type}`).classList.add('active');
+};
 
-    const myOwned = Object.keys(scoutInv);
-    const unowned = candidates.filter(n => !myOwned.includes(n));
-    const result = [];
+function finalizeSettlement() {
+    const rows = document.querySelectorAll('.singer-input-row');
+    let addedAny = false;
+    rows.forEach(row => {
+        const name = row.querySelector('input').value.trim();
+        const type = row.dataset.type;
+        if(name) {
+            singers[type].push(name);
+            addedAny = true;
+        }
+    });
+    if(!addedAny) return alert("請至少輸入一位歌手");
+    drawCards(currentTask.n);
+    syncData();
+}
+
+// ==================== 圖片處理與蒐集冊 ====================
+function getCardImage(group, member) {
+    // 替換空格為底線，符合一般檔案命名習慣
+    const safeGroup = group.replace(/ /g, '_');
+    const safeMember = member.replace(/ /g, '_');
+    // 相對路徑: ./images/團體_成員.jpg
+    return `./images/${safeGroup}_${safeMember}.jpg`;
+}
+
+// 圖片載入失敗時的預設圖
+function handleImgError(img, g, m) {
+    img.onerror = null; // 防止無限循環
+    img.src = `https://placehold.co/400x600/1e1e1e/FFF?text=${g}%0A${m}&font=roboto`;
+}
+
+function drawCards(count, isEx = false) {
+    const pool = [];
+    for(let g in GIRL_GROUPS) {
+        if(!GIRL_GROUPS[g].every(m => collection[`${g}_${m}`])) {
+            GIRL_GROUPS[g].forEach(m => pool.push({g, m, k:`${g}_${m}`}));
+        }
+    }
+    if(pool.length === 0) return alert("已集滿全體！");
+
+    const resDiv = document.getElementById('draw-results');
+    resDiv.innerHTML = "";
 
     for(let i=0; i<count; i++) {
-        if(unowned.length > 0) {
-            const idx = Math.floor(Math.random()*unowned.length);
-            result.push(unowned.splice(idx, 1)[0]);
+        let p;
+        if(isEx) {
+            const unowned = pool.filter(x => !collection[x.k]);
+            p = unowned.length > 0 ? unowned[Math.floor(Math.random()*unowned.length)] : pool[0];
         } else {
-            result.push(candidates[Math.floor(Math.random()*candidates.length)]);
+            p = pool[Math.floor(Math.random()*pool.length)];
         }
-    }
-    return result;
-}
-
-function findSingerByCountAndType(type, count) {
-    for(let k in scoutInv) {
-        if((!type || scoutInv[k].type === type) && scoutInv[k].count >= count) return k;
-    }
-    return null;
-}
-
-function removeRandomSingersDeep(type, countToRemove) {
-    let pool = [];
-    for(let k in scoutInv) {
-        if(!type || scoutInv[k].type === type) {
-            for(let i=0; i<scoutInv[k].count; i++) pool.push(k);
-        }
-    }
-
-    if(pool.length === 0) return;
-
-    let removedNames = [];
-    for(let i=0; i<countToRemove; i++) {
-        if(pool.length === 0) break;
-        const idx = Math.floor(Math.random()*pool.length);
-        const removedName = pool.splice(idx, 1)[0];
-        removedNames.push(removedName);
+        collection[p.k] = (collection[p.k] || 0) + 1;
         
-        if(scoutInv[removedName]) {
-            scoutInv[removedName].count--;
-            if(scoutInv[removedName].count <= 0) delete scoutInv[removedName];
-        }
+        const imgUrl = getCardImage(p.g, p.m);
+        resDiv.innerHTML += `
+            <div style="margin:5px; animation: popIn 0.5s;">
+                <img src="${imgUrl}" onerror="handleImgError(this, '${p.g}', '${p.m}')" style="width:100px; height:140px; border-radius:8px; object-fit:cover; border:2px solid white;">
+                <div style="font-size:12px; margin-top:5px;">${p.m}</div>
+            </div>
+        `;
     }
-    
-    syncMyData();
-    updateScoutUI();
+    document.getElementById('draw-modal').style.display = 'flex';
 }
 
-function removeRandomMySinger(type, count) {
-    removeRandomSingersDeep(type, count);
-}
-
-function executeBatchDraw(count) {
-    const list = document.getElementById('draw-result-list'); 
-    list.innerHTML = '';
+function renderCollection() {
+    const container = document.getElementById('collection-container');
+    if(!container) return; // 安全檢查
+    container.innerHTML = "";
     
-    if(doubleNext && count > 0) {
-        count *= 2; 
-        doubleNext = false; 
-        localStorage.setItem(`v61_double_${myName}`, false);
-        showPopToast("效果加倍生效！抽卡數 X2", "warn");
-    }
-
-    let gainedNames = [];
-    for(let i=0; i<count; i++){
-        const id = Math.floor(Math.random()*50)+1;
-        addCardToInventory(id);
-        gainedNames.push(`#${id} ${CARDS_RAW[id].n}`);
+    for(let g in GIRL_GROUPS) {
+        const isComp = GIRL_GROUPS[g].every(m => collection[`${g}_${m}`]);
+        const sec = document.createElement('div');
+        sec.className = `group-section ${isComp?'group-complete':''}`;
+        sec.innerHTML = `<div class="group-header"><div class="group-name">${g} ${isComp?'👑':''}</div></div>`;
         
-        const card = CARDS_RAW[id];
-        list.innerHTML += `<div class="res-card ${card.r}">
-            <span style="font-size:10px;">#${id}</span>
-            <span>${card.n}</span>
-            <span style="font-size:10px;">${card.r}</span>
-        </div>`;
-    }
-    
-    showPopToast(`🎴 獲得 ${count} 張卡片:\n${gainedNames.join('\n')}`);
-    showPage('page-machine');
-    
-    if(inventory[44] && inventory[44] >= 5) {
-        setTimeout(() => showAlert("合成提醒", "你擁有5隻哥布林，可以合成了！"), 1000);
-    }
-}
-
-function addCardToInventory(id) {
-    inventory[id] = (inventory[id]||0) + 1;
-    localStorage.setItem(`v61_inv_${myName}`, JSON.stringify(inventory));
-}
-
-function consumeCard(id) {
-    if(inventory[id] > 0) {
-        inventory[id]--;
-        if(inventory[id] === 0) delete inventory[id];
-        localStorage.setItem(`v61_inv_${myName}`, JSON.stringify(inventory));
-    }
-}
-
-function mergeGoblin() {
-    if((inventory[44]||0) >= 5) {
-        inventory[44] -= 5;
-        if(inventory[44]===0) delete inventory[44];
-        const highIds = []; for(let i=1; i<=30; i++) highIds.push(i);
-        const newId = highIds[Math.floor(Math.random()*highIds.length)];
-        addCardToInventory(newId);
-        alert(`合成成功！獲得 #${newId} ${CARDS_RAW[newId].n}`);
-        openCollection();
-    }
-}
-
-function saveSingersAndDraw(){
-    let added = [];
-    document.querySelectorAll('.entry-row').forEach(row => {
-        const name = row.querySelector('.singer-in').value.trim();
-        const type = row.querySelector('.type-in').value;
-        if(name) {
-            addScout(name, type, 1);
-            added.push(`${name}(${type})`);
-        }
-    });
-
-    // V61: 如果是攔截任務，額外獲得 王ADEN
-    if(isIntercepting) {
-        addScout("王ADEN", "male", 1);
-        added.push("王ADEN(male) [攔截獎勵]");
-        isIntercepting = false; // 重置狀態
-    }
-
-    if(added.length>0) showPopToast(`🎤 已獲得歌手:\n${added.join('\n')}`);
-    executeBatchDraw(currentTask ? currentTask.n : 1);
-}
-
-function addScout(name, type, count) {
-    if(!name) return;
-    if(scoutInv[name]) scoutInv[name].count += count;
-    else scoutInv[name] = { count: count, type: type };
-    
-    totalHistory.push(`${name}|${type}`);
-    localStorage.setItem(`v61_history_${myName}`, JSON.stringify(totalHistory));
-    
-    syncMyData();
-    updateScoutUI();
-    if(count > 0 && !document.getElementById('page-singer-entry').classList.contains('active')) {
-         showPopToast(`🎤 獲得歌手: ${name} (${type})`);
-    }
-}
-
-function scoutDrawReward(){
-    const keys = Object.keys(scoutInv);
-    if(keys.length < 10) return;
-    for(let i=0; i<10; i++) {
-        let n = keys[i];
-        scoutInv[n].count--;
-        if(scoutInv[n].count <= 0) delete scoutInv[n];
-    }
-    syncMyData(); updateScoutUI();
-    executeBatchDraw(2);
-}
-
-// ==================== UI ====================
-
-function updateScoutUI(){
-    const distinct = Object.keys(scoutInv).length;
-    document.getElementById('scout-count-text').innerText = `${distinct} / 10`;
-    
-    const btn = document.getElementById('scout-draw-btn');
-    btn.disabled = distinct < 10;
-    
-    // V61: 明亮的發光按鈕
-    if(distinct >= 10) {
-        btn.classList.add('btn-glow');
-        btn.style.color = 'black'; 
-    } else {
-        btn.classList.remove('btn-glow');
-        btn.style.color = '#555';
-    }
-    
-    renderSingerList('list-male', 'male');
-    renderSingerList('list-female', 'female');
-    renderSingerList('list-group', 'group');
-}
-
-function renderSingerList(elementId, type) {
-    const div = document.getElementById(elementId);
-    div.innerHTML = "";
-    for(let n in scoutInv) {
-        if(scoutInv[n].type === type) {
-            div.innerHTML += `<span class="singer-tag" style="color:var(--${type}-clr); border:1px solid var(--${type}-clr);">${n} x${scoutInv[n].count}</span>`;
-        }
-    }
-    if(div.innerHTML === "") div.innerHTML = "<span style='color:#555; font-size:12px;'>無歌手</span>";
-}
-
-function openCollection(isSelectMode = false){
-    showPage('page-collection'); 
-    const list = document.getElementById('coll-list'); 
-    list.innerHTML='';
-    let totalCards = 0;
-    document.getElementById('goblin-merge-area').style.display = (inventory[44]||0)>=5 ? 'block' : 'none';
-
-    for(let i=1; i<=50; i++){
-        const count = inventory[i]||0;
-        totalCards += count;
-        if(count > 0) {
-            const c = CARDS_RAW[i];
-            list.innerHTML += `<div class="res-card ${c.r}" onclick="openCardModal(${i}, ${isSelectMode})">
-                <span>#${i}</span>
-                <span style="font-size:10px;">${c.n}</span>
-                <span style="position:absolute; bottom:2px; right:5px;">x${count}</span>
-            </div>`;
-        } else {
-            list.innerHTML += `<div class="res-card" style="opacity:0.15; border-style:dashed;">#${i}</div>`;
-        }
-    }
-    document.getElementById('card-count').innerText = `總張數: ${totalCards}`;
-}
-
-function openCardModal(id, isSelectMode){
-    const c = CARDS_RAW[id];
-    document.getElementById('modal').style.display = 'flex';
-    document.getElementById('m-rarity').innerText = c.r;
-    document.getElementById('m-rarity').className = c.r; 
-    document.getElementById('m-id').innerText = `#${id}`;
-    document.getElementById('m-name').innerText = c.n;
-    document.getElementById('m-desc').innerText = c.d;
-
-    const needsTarget = c.d.includes("對方") || c.d.includes("對手") || c.d.includes("雙方");
-    const targetArea = document.getElementById('target-select-area');
-    const targetDrop = document.getElementById('target-dropdown');
-    
-    targetDrop.innerHTML = "";
-    let hasOpp = false;
-    for(let p in roomPlayers) {
-        if(p !== myName) {
-            targetDrop.innerHTML += `<option value="${p}">${p}</option>`;
-            hasOpp = true;
-        }
-    }
-    
-    if(needsTarget) {
-        targetArea.style.display = 'block';
-        if(!hasOpp) targetDrop.innerHTML = "<option value=''>無其他玩家</option>";
-    } else {
-        targetArea.style.display = 'none';
-    }
-
-    const btn = document.getElementById('use-btn');
-    
-    // V61: 檢查邏輯
-    const currentTarget = targetDrop.value || null;
-    const usability = checkCardUsability(id, currentTarget);
-    
-    if(usability.ok) {
-        btn.innerText = isSelectMode ? "使用並返回" : "使用";
-        btn.className = "btn-main";
-        btn.onclick = () => {
-            useCard(id);
-            if(isSelectMode) showPage('page-challenge');
-        };
-    } else {
-        btn.innerText = usability.msg;
-        btn.className = "btn-sec btn-disabled";
-        btn.onclick = null;
-    }
-    
-    targetDrop.onchange = () => {
-        const newCheck = checkCardUsability(id, targetDrop.value);
-        if(newCheck.ok) {
-             btn.innerText = isSelectMode ? "使用並返回" : "使用";
-             btn.className = "btn-main";
-             btn.onclick = () => { useCard(id); if(isSelectMode) showPage('page-challenge'); };
-        } else {
-             btn.innerText = newCheck.msg;
-             btn.className = "btn-sec btn-disabled";
-             btn.onclick = null;
-        }
-    }
-}
-
-function showAlert(title, msg, actionsHtml = "") {
-    const m = document.getElementById('alert-modal');
-    document.getElementById('alert-title').innerText = title;
-    document.getElementById('alert-msg').innerHTML = msg;
-    const actionBox = document.getElementById('alert-actions');
-    actionBox.innerHTML = actionsHtml;
-    
-    if(!actionsHtml) {
-        actionBox.innerHTML = `<button class="btn-main" onclick="document.getElementById('alert-modal').style.display='none'">確定</button>`;
-    }
-    m.style.display = 'flex';
-}
-
-function showPopToast(msg, type='info') {
-    const t = document.getElementById('toast');
-    const box = document.getElementById('toast-msg');
-    box.innerText = msg;
-    t.style.display = 'block';
-    t.style.borderColor = type==='error'?'red' : (type==='warn'?'gold':'#e91e63');
-    setTimeout(() => t.style.display = 'none', 4000);
-}
-
-function closeModal(){ document.getElementById('modal').style.display='none'; }
-function backFromCollection() { showPage('page-home'); }
-
-function addInput(){
-    const div=document.createElement('div'); div.className='entry-row';
-    div.innerHTML = `
-        <input type="text" class="singer-in" placeholder="歌手名">
-        <select class="type-in">
-            <option value="male">男</option>
-            <option value="female">女</option>
-            <option value="group">團體</option>
-        </select>`;
-    document.getElementById('singer-inputs-container').appendChild(div);
-}
-
-function updatePlayerUI(){
-    const list = document.getElementById('opp-list-box');
-    list.innerHTML = "";
-    for(let p in roomPlayers){
-        if(p === myName) document.getElementById('display-score').innerText = roomPlayers[p].score || 0;
-        else list.innerHTML += `<div class="opp-item">👤 ${p}: ${roomPlayers[p].score||0}</div>`;
-    }
-}
-
-function showPage(id){ 
-    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active')); 
-    document.getElementById(id).classList.add('active'); 
-    window.scrollTo(0,0); 
-    
-    if(id === 'page-singer-entry') {
-        document.getElementById('singer-inputs-container').innerHTML = '';
-        addInput(); 
-
-        const con = document.getElementById('history-tags-container');
-        con.innerHTML = "";
-        let uniqueHistory = [...new Set(totalHistory)];
-        uniqueHistory.slice(-20).forEach(h => {
-            const [n,t] = h.split('|');
-            con.innerHTML += `<span class="singer-tag" style="color:var(--${t}-clr); border:1px solid var(--${t}-clr); cursor:pointer;" onclick="fillInput('${n}','${t}')">${n}</span>`;
+        const grid = document.createElement('div');
+        grid.className = "member-grid";
+        
+        GIRL_GROUPS[g].forEach(m => {
+            const num = collection[`${g}_${m}`] || 0;
+            const imgUrl = getCardImage(g, m);
+            
+            const card = document.createElement('div');
+            card.className = `member-card ${num?'owned':''}`;
+            if(isExchangeMode && num>=5) card.style.borderColor = "var(--gold)";
+            
+            card.innerHTML = `
+                <img src="${imgUrl}" class="card-thumb" onerror="handleImgError(this, '${g}', '${m}')" style="opacity:${num?1:0.3}">
+                <div class="member-name">${num ? m : '?'}</div>
+                ${num ? `<div class="member-count">x${num}</div>` : ''}
+            `;
+            
+            card.onclick = () => { 
+                if(isExchangeMode && num>=5) exchangeCard(g, m); 
+                else if(num > 0) openCardView(g, m);
+            };
+            grid.appendChild(card);
         });
+        sec.appendChild(grid);
+        container.appendChild(sec);
     }
 }
 
-function fillInput(n, t) {
-    const inputs = document.querySelectorAll('.singer-in');
-    let filled = false;
-    inputs.forEach(input => {
-        if(!input.value && !filled) {
-            input.value = n;
-            input.nextElementSibling.value = t;
-            filled = true;
-        }
+function openCardView(group, member) {
+    const img = document.getElementById('view-img');
+    img.src = getCardImage(group, member);
+    img.onerror = () => handleImgError(img, group, member); // 大圖也要防呆
+    
+    document.getElementById('view-name').innerText = member;
+    document.getElementById('view-group').innerText = group;
+    document.getElementById('card-view-modal').style.display = 'flex';
+}
+
+function closeCardView() { document.getElementById('card-view-modal').style.display = 'none'; }
+
+function exchangeCard(g, m) {
+    if(!confirm(`消耗 5 張 ${m} 換取 1 張未擁有卡片？`)) return;
+    collection[`${g}_${m}`] -= 5;
+    drawCards(1, true);
+    syncData();
+}
+
+function toggleExchangeMode() {
+    isExchangeMode = !isExchangeMode;
+    document.getElementById('btn-exchange-toggle').innerText = isExchangeMode ? "退出兌換模式" : "♻️ 5換1 保底兌換模式";
+    renderCollection();
+}
+
+function updateRanking(data) {
+    const list = document.getElementById('ranking-list');
+    list.innerHTML = "";
+    Object.values(data || {}).sort((a,b)=>b.completedGroups - a.completedGroups).forEach((p, i) => {
+        list.innerHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>${i+1}. ${p.name}</span><span>${p.completedGroups} 👑 / ${p.cardCount}張</span></div>`;
     });
-    if(!filled) {
-        addInput();
-        const newInputs = document.querySelectorAll('.singer-in');
-        const last = newInputs[newInputs.length-1];
-        last.value = n;
-        last.nextElementSibling.value = t;
-    }
 }
 
-function countTotalCards(){ let c=0; for(let k in inventory) c+=inventory[k]; return c; }
-function countRarity(r){ let c=0; for(let k in inventory) if(CARDS_RAW[k].r===r) c+=inventory[k]; return c; }
-function testGetAllCards() { for(let i=1; i<=50; i++) inventory[i] = (inventory[i]||0)+1; localStorage.setItem(`v61_inv_${myName}`, JSON.stringify(inventory)); openCollection(); showPopToast("已獲得所有卡片！"); }
+function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.innerText = msg;
+    t.style.display = 'block';
+    setTimeout(() => t.style.display = 'none', 2000);
+}
 
+function showPage(id) { 
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); 
+    document.getElementById(id).classList.add('active'); 
+    window.scrollTo(0,0);
+    // 確保切換到蒐集冊時一定會渲染
+    if(id === 'page-book') renderCollection(); 
+}
+function closeDrawModal() { document.getElementById('draw-modal').style.display = 'none'; showPage('page-home'); }
 </script>
 </body>
 </html>

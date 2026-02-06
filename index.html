@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>K-Pop 蒐集戰 V67</title>
+    <title>K-Pop 蒐集戰 V68</title>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-database-compat.js"></script>
     <style>
@@ -115,8 +115,11 @@
         .member-card.owned { opacity: 1; border-color: var(--accent); cursor: pointer; transition: transform 0.1s; }
         .member-card.owned:active { transform: scale(0.95); }
         
+        /* 圖片修正：增加 object-position: top; */
         .card-thumb {
-            width: 50px; height: 50px; border-radius: 5px; background: #333; margin-bottom: 5px; object-fit: cover;
+            width: 50px; height: 50px; border-radius: 5px; background: #333; margin-bottom: 5px; 
+            object-fit: cover; 
+            object-position: top center; /* 關鍵修正：對齊頂部，避免切頭 */
         }
 
         /* Modal */
@@ -129,13 +132,21 @@
             box-shadow: 0 0 30px rgba(255, 64, 129, 0.3);
         }
         .card-big-img {
-            width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 10px; margin-bottom: 15px; background: #000;
+            width: 100%; aspect-ratio: 3/4; object-fit: cover; object-position: top center; /* 大圖也對齊頂部 */
+            border-radius: 10px; margin-bottom: 15px; background: #000;
         }
         .card-big-name { font-size: 24px; font-weight: bold; color: white; margin-bottom: 5px; }
         .card-big-group { font-size: 14px; color: var(--highlight); margin-bottom: 15px; }
 
         .task-box { border: 1px solid var(--highlight); border-radius: 12px; padding: 20px; margin-bottom: 20px; background: rgba(0, 229, 255, 0.05); }
         .toast { position: fixed; top: 20%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; z-index: 1000; display: none; }
+        
+        /* 抽卡結果的圖片樣式 */
+        .draw-card-img {
+            width: 100px; height: 140px; border-radius: 8px; 
+            object-fit: cover; object-position: top center; /* 對齊頂部 */
+            border: 2px solid white;
+        }
     </style>
 </head>
 <body>
@@ -153,8 +164,8 @@
 </div>
 
 <div id="page-login" class="page active">
-    <h1 style="color:var(--accent);">K-Pop 蒐集戰 V67</h1>
-    <p style="color:#888; font-size:12px;">經典二代團 • 圖片路徑優化</p>
+    <h1 style="color:var(--accent);">K-Pop 蒐集戰 V68</h1>
+    <p style="color:#888; font-size:12px;">圖片不切頭 • 檔名邏輯簡化</p>
     <input type="text" id="inName" placeholder="你的暱稱" style="width:80%; padding:15px; background:#222; border:1px solid #444; color:white; border-radius:8px; margin-bottom:10px;">
     <input type="text" id="inRoom" placeholder="房間號碼" style="width:80%; padding:15px; background:#222; border:1px solid #444; color:white; border-radius:8px; margin-bottom:20px;">
     <button class="btn-main" onclick="initGame()">開始挑戰</button>
@@ -239,7 +250,6 @@
 
 <script>
 // ==================== 資料庫 ====================
-// V67 新增: 4minute, After School, f(x), KARA, Miss A, SISTAR, T-ara
 const GIRL_GROUPS = {
     "BLACKPINK": ["Jisoo", "Jennie", "Rosé", "Lisa"],
     "aespa": ["Karina", "Giselle", "Winter", "Ningning"],
@@ -269,7 +279,6 @@ const GIRL_GROUPS = {
     "CLC": ["Seunghee", "Yujin", "Seungyeon", "Sorn", "Yeeun", "Elkie", "Eunbin"],
     "AOA": ["Choa", "Jimin", "Yuna", "Hyejeong", "Mina", "Seolhyun", "Chanmi"],
     "2NE1": ["Bom", "Dara", "CL", "Minzy"],
-    // === 新增 V67 ===
     "4minute": ["Jihyun", "Gayoon", "Jiyoon", "Hyuna", "Sohyun"],
     "After School": ["Kahi", "Jungah", "Soyoung", "Juyeon", "Uee", "Bekah", "Raina", "Nana", "Lizzy", "E-Young", "Kaeun"],
     "f(x)": ["Victoria", "Amber", "Luna", "Krystal", "Sulli"],
@@ -277,7 +286,6 @@ const GIRL_GROUPS = {
     "Miss A": ["Fei", "Jia", "Min", "Suzy"],
     "SISTAR": ["Hyolyn", "Bora", "Soyou", "Dasom"],
     "T-ara": ["Boram", "Qri", "Soyeon", "Eunjung", "Hyomin", "Jiyeon"],
-    // ================
     "hearts2hearts": ["Member A", "Member B", "Member C", "Member D"], 
     "KiiiKii": ["Member 1", "Member 2", "Member 3", "Member 4"]
 };
@@ -307,8 +315,8 @@ function initGame() {
     myRoom = document.getElementById('inRoom').value.trim();
     if (!myName || !myRoom) return alert("請填寫資訊");
 
-    collection = JSON.parse(localStorage.getItem(`v67_col_${myName}`)) || {};
-    singers = JSON.parse(localStorage.getItem(`v67_sin_${myName}`)) || { m: [], f: [], g: [] };
+    collection = JSON.parse(localStorage.getItem(`v68_col_${myName}`)) || {};
+    singers = JSON.parse(localStorage.getItem(`v68_sin_${myName}`)) || { m: [], f: [], g: [] };
 
     document.getElementById('display-name').innerText = myName;
     document.getElementById('display-room').innerText = myRoom;
@@ -336,10 +344,9 @@ function syncData() {
     renderHomeSingers();
 
     db.ref(`rooms/${myRoom}/players/${myName}`).update({ completedGroups: comp, cardCount: Object.values(collection).reduce((a,b)=>a+b, 0) });
-    localStorage.setItem(`v67_col_${myName}`, JSON.stringify(collection));
-    localStorage.setItem(`v67_sin_${myName}`, JSON.stringify(singers));
+    localStorage.setItem(`v68_col_${myName}`, JSON.stringify(collection));
+    localStorage.setItem(`v68_sin_${myName}`, JSON.stringify(singers));
     
-    // 同步刷新蒐集冊
     renderCollection();
 }
 
@@ -420,7 +427,7 @@ function goToSettlement() {
     showPage('page-settle');
 }
 
-// ==================== 歌手登錄結算 (智慧標籤) ====================
+// ==================== 歌手登錄結算 ====================
 function addSingerInputRow() {
     const container = document.getElementById('singer-input-container');
     const rowId = Date.now() + Math.random().toString(36).substr(2, 5);
@@ -498,19 +505,19 @@ function finalizeSettlement() {
     syncData();
 }
 
-// ==================== 圖片處理 (V67 優化版) ====================
+// ==================== 圖片處理 (V68 優化版) ====================
 function getCardImage(group, member) {
-    // 檔名規則：
-    // 1. 移除特殊字元 (括號、星星等) => replace(/[\*\(\)]/g, '')
-    // 2. 空格轉底線 => replace(/ /g, '_')
-    // 範例: "f(x)" -> "fx", "IZ*ONE" -> "IZONE"
-    const safeGroup = group.replace(/ /g, '_').replace(/[\*\(\)]/g, '');
-    const safeMember = member.replace(/ /g, '_');
+    // 1. 空格轉底線
+    let safeGroup = group.replace(/ /g, '_');
     
+    // 2. 移除非字母、非數字、非底線的所有符號 (含括號、橫線、星號等)
+    // 這樣 (G)I-DLE 變成 GIDLE，T-ara 變成 Tara
+    safeGroup = safeGroup.replace(/[^a-zA-Z0-9_]/g, '');
+
+    const safeMember = member.replace(/ /g, '_');
     return `./images/${safeGroup}_${safeMember}.jpg`;
 }
 
-// 圖片防呆
 function handleImgError(img, g, m) {
     img.onerror = null;
     img.src = `https://placehold.co/400x600/1e1e1e/FFF?text=${g}%0A${m}&font=roboto`;
@@ -541,7 +548,7 @@ function drawCards(count, isEx = false) {
         const imgUrl = getCardImage(p.g, p.m);
         resDiv.innerHTML += `
             <div style="margin:5px; animation: popIn 0.5s;">
-                <img src="${imgUrl}" onerror="handleImgError(this, '${p.g}', '${p.m}')" style="width:100px; height:140px; border-radius:8px; object-fit:cover; border:2px solid white;">
+                <img src="${imgUrl}" onerror="handleImgError(this, '${p.g}', '${p.m}')" class="draw-card-img">
                 <div style="font-size:12px; margin-top:5px;">${p.m}</div>
             </div>
         `;
@@ -554,7 +561,6 @@ function renderCollection() {
     if(!container) return;
     container.innerHTML = "";
     
-    // 按照加入順序或名稱排序顯示
     for(let g in GIRL_GROUPS) {
         const isComp = GIRL_GROUPS[g].every(m => collection[`${g}_${m}`]);
         const sec = document.createElement('div');

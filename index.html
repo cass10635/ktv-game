@@ -229,13 +229,12 @@
     </div>
 </div>
 
-<div id="page-book" class="page">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+<div id="page-book" class="page" style="padding-top: 0;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; position: sticky; top: 0; background: var(--bg-dark); padding: 15px 0; z-index: 100; border-bottom: 1px solid #333;">
         <h2 style="margin:0;">成員蒐集冊</h2>
-        <button class="btn-sec" style="width:auto;" onclick="showPage('page-home')">返回</button>
+        <button class="btn-sec" style="width:auto; margin:0;" onclick="showPage('page-home')">返回</button>
     </div>
-    <div id="collection-container">
-        </div>
+    <div id="collection-container"></div>
 </div>
 
 <div id="draw-modal">
@@ -517,16 +516,14 @@ function initGame() {
     myRoom = document.getElementById('inRoom').value.trim();
     if (!myName || !myRoom) return alert("請填寫資訊");
 
-    // 【核心修正：強制先讀取雲端資料】
+    // 【核心修正：強制先讀取雲端資料，保證關掉重開不遺失】
     db.ref(`rooms/${myRoom}/players/${myName}`).once('value').then(snap => {
         const data = snap.val();
         
-        // 只要雲端有存過資料，就一律以雲端的為主
         if (data && (data.collection || data.singers)) {
             collection = data.collection || {};
             singers = data.singers || { m: [], f: [], g: [] };
         } else {
-            // 如果雲端完全沒紀錄（第一次玩），才去讀本機暫存
             collection = JSON.parse(localStorage.getItem(`v70_col_${myName}`)) || {};
             singers = JSON.parse(localStorage.getItem(`v70_sin_${myName}`)) || { m: [], f: [], g: [] };
         }
@@ -535,7 +532,6 @@ function initGame() {
         document.getElementById('display-room').innerText = myRoom;
         document.getElementById('ui-header').style.display = 'flex';
 
-        // 登入時立刻把最新狀態寫回資料庫，避免被清空
         db.ref(`rooms/${myRoom}/players/${myName}`).update({ 
             name: myName, 
             lastActive: Date.now(),
@@ -564,7 +560,6 @@ function syncData() {
 
     renderHomeSingers();
 
-    // 【核心修正：把卡包和歌手陣列一併上傳，確保完整備份】
     if (myName && myRoom) {
         db.ref(`rooms/${myRoom}/players/${myName}`).update({ 
             completedGroups: comp, 
@@ -609,13 +604,11 @@ function startTask() {
     const t = TASKS[Math.floor(Math.random() * TASKS.length)];
     let extra = "";
     
-    // V70: 邏輯更新
     if(t.type === "zy") {
         extra = VALID_ZHUYIN[Math.floor(Math.random() * VALID_ZHUYIN.length)];
     } else if(t.type === "num") {
         extra = NUM_OPTIONS[Math.floor(Math.random() * NUM_OPTIONS.length)];
     } else if(t.type === "lyric") {
-        // V70: 歌詞多題庫隨機選一句
         const songObj = LYRICS_DB[Math.floor(Math.random() * LYRICS_DB.length)];
         const randomLine = songObj.lines[Math.floor(Math.random() * songObj.lines.length)];
         extra = `\n"${randomLine}"`;
@@ -751,20 +744,18 @@ function finalizeSettlement() {
     syncData();
 }
 
-// ==================== 圖片處理 ====================
+// ==================== 圖片處理 (包含完美防破圖機制) ====================
 function getCardImage(group, member) {
-    let safeGroup = group.replace(/ /g, '_');
-    safeGroup = safeGroup.replace(/[^a-zA-Z0-9_]/g, ''); // 移除特殊符號
+    let safeGroup = group.replace(/ /g, '_').replace(/[^a-zA-Z0-9_]/g, ''); 
     const safeMember = member.replace(/ /g, '_');
     return `./images/${safeGroup}_${safeMember}.jpg`;
 }
 
-function handleImgError(img, g, m) {
-    img.onerror = null;
-    // 【修復破圖】：幫字串加上 encodeURIComponent 安全編碼，避免括號等特殊字元破壞網址
-    const safeText = encodeURIComponent(`${g}\n${m}`);
-    img.src = `https://placehold.co/400x600/1e1e1e/FFF?text=${safeText}&font=roboto`;
-}
+window.handleImgError = function(img, member) {
+    img.onerror = null; // 防止無限迴圈
+    // 自動生成美觀的 SVG 預設圖代替破圖
+    img.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='400' style='background:%23222;'><text x='50%25' y='50%25' font-size='24' fill='%23ff4081' dominant-baseline='middle' text-anchor='middle'>" + member + "</text></svg>";
+};
 
 function drawCards(count, isEx = false) {
     const pool = [];
@@ -789,11 +780,13 @@ function drawCards(count, isEx = false) {
         collection[p.k] = (collection[p.k] || 0) + 1;
         
         const imgUrl = getCardImage(p.g, p.m);
-        // V70: 抽卡結果使用 draw-card-img 樣式 (contain)
+        
+        // 加入真實的 img 標籤與 onerror 自動修復機制
         resDiv.innerHTML += `
-            <div style="margin:5px; animation: popIn 0.5s;">
-                <img src="${imgUrl}" onerror="handleImgError(this, '${p.g}', '${p.m}')" class="draw-card-img">
-                <div style="font-size:12px; margin-top:5px;">${p.m}</div>
+            <div style="margin:10px; text-align:center; background:#222; padding:10px; border-radius:8px; border:1px solid var(--accent);">
+                <img src="${imgUrl}" onerror="handleImgError(this, '${p.m}')" style="width:100px; height:140px; background:#333; border-radius:5px; margin-bottom:5px; object-fit:cover;">
+                <div style="font-size:12px; font-weight:bold;">${p.m}</div>
+                <div style="font-size:10px; color:#aaa;">${p.g}</div>
             </div>
         `;
     }
@@ -822,11 +815,12 @@ function renderCollection() {
             const card = document.createElement('div');
             card.className = `member-card ${num?'owned':''}`;
             if(isExchangeMode && num>=5) card.style.borderColor = "var(--gold)";
-             
+            
+            // 使用 img 標籤並加上 onerror 修復機制
             card.innerHTML = `
-                <img src="${imgUrl}" class="card-thumb" onerror="handleImgError(this, '${g}', '${m}')" style="opacity:${num?1:0.3}">
-                <div class="member-name">${num ? m : '?'}</div>
-                ${num ? `<div class="member-count">x${num}</div>` : ''}
+                <img src="${imgUrl}" class="card-thumb" onerror="handleImgError(this, '${m}')" style="opacity:${num?1:0.3}; margin-bottom:5px;">
+                <div class="member-name" style="font-size:12px; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%; text-align:center;">${num ? m : '?'}</div>
+                ${num ? `<div class="member-count" style="font-size:10px; color:var(--accent);">x${num}</div>` : ''}
             `;
             
             card.onclick = () => { 
@@ -841,9 +835,11 @@ function renderCollection() {
 }
 
 function openCardView(group, member) {
-    const img = document.getElementById('view-img');
-    img.src = getCardImage(group, member);
-    img.onerror = () => handleImgError(img, group, member);
+    const imgEl = document.getElementById('view-img');
+    if (imgEl) {
+        imgEl.src = getCardImage(group, member);
+        imgEl.onerror = function() { handleImgError(this, member); };
+    }
     
     document.getElementById('view-name').innerText = member;
     document.getElementById('view-group').innerText = group;

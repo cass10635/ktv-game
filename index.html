@@ -8,7 +8,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-database-compat.js"></script>
     <style>
         :root { 
-            --bg-dark: #121212; 
+            --bg-dark: #121212;
             --card-bg: #1e1e1e;
             --accent: #ff4081;
             --highlight: #00e5ff;
@@ -18,135 +18,192 @@
             --group: #4caf50;
         }
         body { 
-            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; 
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
             background: var(--bg-dark); 
             color: white; margin: 0; text-align: center; min-height: 100vh; padding-bottom: 80px;
         }
         
         /* 頂部資訊列 */
         .header { 
-            background: rgba(30, 30, 30, 0.95); backdrop-filter: blur(5px);
+            background: rgba(30, 30, 30, 0.95);
+            backdrop-filter: blur(5px);
             padding: 10px 20px; border-bottom: 1px solid #333;
             position: sticky; top: 0; z-index: 100;
-            display: flex; justify-content: space-between; align-items: center;
+            display: flex; justify-content: space-between;
+            align-items: center;
         }
-        .player-info { text-align: left; }
-        .score-display { font-size: 20px; font-weight: bold; color: var(--gold); }
+        .player-info { text-align: left;
+        }
+        .score-display { font-size: 20px; font-weight: bold; color: var(--gold);
+        }
 
         /* 按鈕系統 */
-        button { padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; color: white; margin: 5px 0; }
-        .btn-main { background: linear-gradient(45deg, #ff4081, #f50057); width: 100%; font-size: 18px; box-shadow: 0 4px 10px rgba(245,0,87,0.3); }
-        .btn-task { background: linear-gradient(45deg, #2196f3, #00e5ff); width: 100%; height: 60px; font-size: 20px; box-shadow: 0 4px 10px rgba(33,150,243,0.3); }
-        .btn-sec { background: #333; border: 1px solid #555; width: 100%; }
-        .btn-book { background: linear-gradient(45deg, #673ab7, #9c27b0); width: 100%; font-size: 18px; margin-top: 10px; }
-        .btn-add { background: #444; color: #aaa; width: auto; padding: 5px 15px; font-size: 12px; }
+        button { padding: 12px 20px;
+            border-radius: 8px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; color: white; margin: 5px 0;
+        }
+        .btn-main { background: linear-gradient(45deg, #ff4081, #f50057); width: 100%; font-size: 18px;
+            box-shadow: 0 4px 10px rgba(245,0,87,0.3); }
+        .btn-task { background: linear-gradient(45deg, #2196f3, #00e5ff);
+            width: 100%; height: 60px; font-size: 20px; box-shadow: 0 4px 10px rgba(33,150,243,0.3);
+        }
+        .btn-sec { background: #333; border: 1px solid #555; width: 100%;
+        }
+        .btn-book { background: linear-gradient(45deg, #673ab7, #9c27b0); width: 100%; font-size: 18px; margin-top: 10px;
+        }
+        .btn-add { background: #444; color: #aaa; width: auto; padding: 5px 15px;
+            font-size: 12px; }
         
         /* 歌手兌換按鈕 */
         .btn-singer-ex { 
-            background: linear-gradient(45deg, #ffb300, #ff6f00); color: black; 
+            background: linear-gradient(45deg, #ffb300, #ff6f00);
+            color: black; 
             width: 100%; margin-top: 15px; animation: pulse 1.5s infinite; 
-            display: none; 
+            display: none;
         }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02);
+        } 100% { transform: scale(1); } }
 
         /* 頁面切換 */
-        .page { display: none; padding: 15px; animation: fadeIn 0.3s; }
-        .active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .page { display: none;
+            padding: 15px; animation: fadeIn 0.3s; }
+        .active { display: block;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1;
+        } }
 
         /* 主頁歌手名冊展示 */
         .home-singer-section {
-            background: #1a1a1a; border-radius: 12px; padding: 15px; 
+            background: #1a1a1a;
+            border-radius: 12px; padding: 15px; 
             margin-bottom: 20px; border: 1px solid #333; text-align: left;
         }
         .singer-tags-container {
-            display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; max-height: 200px; overflow-y: auto;
+            display: flex;
+            flex-wrap: wrap; gap: 5px; margin-top: 10px; max-height: 200px; overflow-y: auto;
         }
         .tag-display {
-            font-size: 12px; padding: 4px 8px; border-radius: 4px; 
+            font-size: 12px;
+            padding: 4px 8px; border-radius: 4px; 
             display: inline-flex; align-items: center; gap: 5px;
         }
-        .tag-display.m { background: rgba(33, 150, 243, 0.2); color: var(--male); border: 1px solid var(--male); }
-        .tag-display.f { background: rgba(255, 64, 129, 0.2); color: var(--female); border: 1px solid var(--female); }
-        .tag-display.g { background: rgba(76, 175, 80, 0.2); color: var(--group); border: 1px solid var(--group); }
+        .tag-display.m { background: rgba(33, 150, 243, 0.2); color: var(--male);
+            border: 1px solid var(--male); }
+        .tag-display.f { background: rgba(255, 64, 129, 0.2);
+            color: var(--female); border: 1px solid var(--female); }
+        .tag-display.g { background: rgba(76, 175, 80, 0.2);
+            color: var(--group); border: 1px solid var(--group); }
 
         /* 歌手輸入列 */
         .singer-input-row { 
-            background: #1e1e1e; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #333; 
+            background: #1e1e1e;
+            padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #333; 
             text-align: left;
         }
-        .type-select { display: flex; gap: 5px; margin-bottom: 10px; }
-        .type-opt { 
-            flex: 1; padding: 10px; text-align: center; border-radius: 6px; font-size: 14px; cursor: pointer; border: 1px solid #444; color: #888; transition: 0.2s;
+        .type-select { display: flex; gap: 5px; margin-bottom: 10px;
         }
-        .type-opt.active.m { background: var(--male); color: white; border-color: var(--male); box-shadow: 0 0 8px var(--male); }
-        .type-opt.active.f { background: var(--female); color: white; border-color: var(--female); box-shadow: 0 0 8px var(--female); }
-        .type-opt.active.g { background: var(--group); color: white; border-color: var(--group); box-shadow: 0 0 8px var(--group); }
+        .type-opt { 
+            flex: 1;
+            padding: 10px; text-align: center; border-radius: 6px; font-size: 14px; cursor: pointer; border: 1px solid #444; color: #888; transition: 0.2s;
+        }
+        .type-opt.active.m { background: var(--male); color: white; border-color: var(--male);
+            box-shadow: 0 0 8px var(--male); }
+        .type-opt.active.f { background: var(--female); color: white;
+            border-color: var(--female); box-shadow: 0 0 8px var(--female); }
+        .type-opt.active.g { background: var(--group);
+            color: white; border-color: var(--group); box-shadow: 0 0 8px var(--group); }
 
         .input-field { 
-            width: 100%; padding: 12px; background: #111; border: 1px solid #444; color: white; border-radius: 5px; box-sizing: border-box; font-size: 16px;
+            width: 100%;
+            padding: 12px; background: #111; border: 1px solid #444; color: white; border-radius: 5px; box-sizing: border-box; font-size: 16px;
         }
 
         /* 統一歷史標籤區 */
         .history-tags-area {
-            margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; 
+            margin-top: 10px;
+            display: flex; flex-wrap: wrap; gap: 6px; 
             background: #111; padding: 8px; border-radius: 8px;
         }
         .quick-tag { 
-            font-size: 11px; padding: 4px 10px; border-radius: 15px; cursor: pointer; transition: 0.2s; 
+            font-size: 11px;
+            padding: 4px 10px; border-radius: 15px; cursor: pointer; transition: 0.2s; 
             border: 1px solid #333; opacity: 0.8;
         }
-        .quick-tag:hover { transform: scale(1.05); opacity: 1; }
-        .quick-tag.t-m { color: var(--male); border-color: var(--male); background: rgba(33, 150, 243, 0.1); }
-        .quick-tag.t-f { color: var(--female); border-color: var(--female); background: rgba(255, 64, 129, 0.1); }
-        .quick-tag.t-g { color: var(--group); border-color: var(--group); background: rgba(76, 175, 80, 0.1); }
+        .quick-tag:hover { transform: scale(1.05); opacity: 1;
+        }
+        .quick-tag.t-m { color: var(--male); border-color: var(--male); background: rgba(33, 150, 243, 0.1);
+        }
+        .quick-tag.t-f { color: var(--female); border-color: var(--female); background: rgba(255, 64, 129, 0.1);
+        }
+        .quick-tag.t-g { color: var(--group); border-color: var(--group); background: rgba(76, 175, 80, 0.1);
+        }
 
         /* 蒐集冊 */
-        .group-section { background: #1e1e1e; border-radius: 12px; margin-bottom: 20px; padding: 15px; border: 1px solid #333; text-align: left; }
-        .group-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 8px; }
-        .group-name { font-size: 18px; font-weight: bold; }
-        .group-complete { border: 2px solid var(--gold); box-shadow: 0 0 10px rgba(255, 215, 0, 0.2); }
-        
-        .member-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-        .member-card { 
-            background: #111; border-radius: 8px; padding: 5px; display: flex; flex-direction: column; align-items: center; justify-content: center;
-            min-height: 90px; border: 1px solid #333; opacity: 0.4; cursor: default;
+        .group-section { background: #1e1e1e;
+            border-radius: 12px; margin-bottom: 20px; padding: 15px; border: 1px solid #333; text-align: left;
         }
-        .member-card.owned { opacity: 1; border-color: var(--accent); cursor: pointer; transition: transform 0.1s; }
-        .member-card.owned:active { transform: scale(0.95); }
+        .group-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+            border-bottom: 1px solid #333; padding-bottom: 8px; }
+        .group-name { font-size: 18px; font-weight: bold;
+        }
+        .group-complete { border: 2px solid var(--gold);
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.2); }
+        
+        .member-grid { display: grid;
+            grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .member-card { 
+            background: #111;
+            border-radius: 8px; padding: 5px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 90px; border: 1px solid #333; opacity: 0.4;
+            cursor: default;
+        }
+        .member-card.owned { opacity: 1; border-color: var(--accent); cursor: pointer;
+            transition: transform 0.1s; }
+        .member-card.owned:active { transform: scale(0.95);
+        }
         
         /* 蒐集冊小圖 (Grid) */
         .card-thumb {
-            width: 50px; height: 50px; border-radius: 5px; background: #222; margin-bottom: 5px; 
+            width: 50px;
+            height: 50px; border-radius: 5px; background: #222; margin-bottom: 5px; 
             object-fit: cover; 
-            object-position: top center; 
+            object-position: top center;
         }
 
         /* Modal */
-        #draw-modal, #card-view-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: none; justify-content: center; align-items: center; z-index: 500; }
+        #draw-modal, #card-view-modal { position: fixed;
+            inset: 0; background: rgba(0,0,0,0.95); display: none; justify-content: center; align-items: center; z-index: 500;
+        }
         
         /* 卡片大圖檢視 */
         .card-view-content {
-            background: #222; border: 2px solid var(--accent); border-radius: 15px; padding: 20px; 
+            background: #222;
+            border: 2px solid var(--accent); border-radius: 15px; padding: 20px; 
             width: 90%; max-width: 320px; text-align: center; position: relative;
             box-shadow: 0 0 30px rgba(255, 64, 129, 0.3);
         }
         .card-big-img {
-            width: 100%; aspect-ratio: 3/4; 
+            width: 100%;
+            aspect-ratio: 3/4; 
             background: #000;
             object-fit: contain; 
             object-position: center;
             border-radius: 10px; margin-bottom: 15px; 
         }
-        .card-big-name { font-size: 24px; font-weight: bold; color: white; margin-bottom: 5px; }
-        .card-big-group { font-size: 14px; color: var(--highlight); margin-bottom: 15px; }
+        .card-big-name { font-size: 24px; font-weight: bold; color: white; margin-bottom: 5px;
+        }
+        .card-big-group { font-size: 14px; color: var(--highlight); margin-bottom: 15px;
+        }
 
-        .task-box { border: 1px solid var(--highlight); border-radius: 12px; padding: 20px; margin-bottom: 20px; background: rgba(0, 229, 255, 0.05); }
-        .toast { position: fixed; top: 20%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; z-index: 1000; display: none; }
+        .task-box { border: 1px solid var(--highlight); border-radius: 12px; padding: 20px; margin-bottom: 20px;
+            background: rgba(0, 229, 255, 0.05); }
+        .toast { position: fixed; top: 20%;
+            left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; z-index: 1000; display: none;
+        }
         
         /* 抽卡結果的圖片樣式 */
         .draw-card-img {
-            width: 100px; height: 140px; border-radius: 8px; 
+            width: 100px;
+            height: 140px; border-radius: 8px; 
             background: #000;
             object-fit: contain; 
             object-position: center;
@@ -497,7 +554,12 @@ const NUM_OPTIONS = ["0","1","2","3","4","5","6","7","8","9","10","百","千","�
 
 // ==================== 狀態與初始化 ====================
 let myName = "", myRoom = "", collection = {}, singers = { m: [], f: [], g: [] }, currentTask = null;
-let singerHistory = { m: [], f: [], g: [] };
+let singerHistory = { m: [], f: [], g: [] }; 
+
+// 【全新安全過濾器】：防止不合法字元導致 Firebase 崩潰
+function getSafeKey(g, m) {
+    return (g + "_" + m).replace(/[\.\$#\[\]\/\x00-\x1F\x7F]/g, '_');
+}
 
 const firebaseConfig = { apiKey: "AIzaSyBjYdhxIQ_LGoNHiAkygjkIqWsb8NgF0s8", authDomain: "ktv-game.firebaseapp.com", databaseURL: "https://ktv-game-default-rtdb.asia-southeast1.firebasedatabase.app", projectId: "ktv-game", storageBucket: "ktv-game.firebasestorage.app", messagingSenderId: "903538372328", appId: "1:903538372328:web:2456e55fcd41f0899f635d" };
 firebase.initializeApp(firebaseConfig);
@@ -533,13 +595,17 @@ function initGame() {
         document.getElementById('display-room').innerText = myRoom;
         document.getElementById('ui-header').style.display = 'flex';
 
-        db.ref(`rooms/${myRoom}/players/${myName}`).update({ 
-            name: myName, 
-            lastActive: Date.now(),
-            collection: collection,
-            singers: singers,
-            singerHistory: singerHistory
-        });
+        try {
+            db.ref(`rooms/${myRoom}/players/${myName}`).update({ 
+                name: myName, 
+                lastActive: Date.now(),
+                collection: collection,
+                singers: singers,
+                singerHistory: singerHistory
+            });
+        } catch (e) {
+            console.error("Firebase Initialization Sync Error:", e);
+        }
         
         db.ref(`rooms/${myRoom}/players`).on('value', snap => updateRanking(snap.val()));
 
@@ -551,7 +617,9 @@ function initGame() {
 
 function syncData() {
     let comp = 0;
-    for(let g in GIRL_GROUPS) if(GIRL_GROUPS[g].every(m => collection[`${g}_${m}`])) comp++;
+    for(let g in GIRL_GROUPS) {
+        if(GIRL_GROUPS[g].every(m => collection[getSafeKey(g, m)])) comp++;
+    }
     
     const uniqueCount = getUniqueSingerCount();
     document.getElementById('total-groups-completed').innerText = `${comp} 👑`;
@@ -560,11 +628,11 @@ function syncData() {
     const exBtn = document.getElementById('btn-singer-exchange');
     if(exBtn) exBtn.style.display = uniqueCount >= 10 ? 'block' : 'none';
     
-    // 【全新全局 5 換 1】：計算所有在 GIRL_GROUPS 中的重複卡片
+    // 計算所有在 GIRL_GROUPS 中的重複卡片
     let totalDupes = 0;
     for(let g in GIRL_GROUPS) {
         GIRL_GROUPS[g].forEach(m => {
-            const num = collection[`${g}_${m}`] || 0;
+            const num = collection[getSafeKey(g, m)] || 0;
             if(num > 1) totalDupes += (num - 1);
         });
     }
@@ -582,14 +650,18 @@ function syncData() {
     renderHomeSingers();
 
     if (myName && myRoom) {
-        db.ref(`rooms/${myRoom}/players/${myName}`).update({ 
-            completedGroups: comp, 
-            cardCount: Object.values(collection).reduce((a,b)=>a+b, 0),
-            collection: collection,
-            singers: singers,
-            singerHistory: singerHistory,
-            lastActive: Date.now()
-        });
+        try {
+            db.ref(`rooms/${myRoom}/players/${myName}`).update({ 
+                completedGroups: comp, 
+                cardCount: Object.values(collection).reduce((a,b)=>a+b, 0),
+                collection: collection,
+                singers: singers,
+                singerHistory: singerHistory,
+                lastActive: Date.now()
+            });
+        } catch (e) {
+            console.error("Firebase Sync Error:", e);
+        }
     }
     
     localStorage.setItem(`v70_col_${myName}`, JSON.stringify(collection));
@@ -667,8 +739,8 @@ function redeemSingers() {
     const unownedPool = [];
     for(let g in GIRL_GROUPS) {
         GIRL_GROUPS[g].forEach(m => {
-            if(!collection[`${g}_${m}`]) {
-                unownedPool.push({g, m, k:`${g}_${m}`});
+            if(!collection[getSafeKey(g, m)]) {
+                unownedPool.push({g, m, k: getSafeKey(g, m)});
             }
         });
     }
@@ -712,12 +784,11 @@ function redeemSingers() {
     showToast("兌換成功！獲得 2 張全新成員卡！");
 }
 
-// 【全新功能：全局任意 5 重複換 1 未擁有】
 function globalExchange() {
     let totalDupes = 0;
     for(let g in GIRL_GROUPS) {
         GIRL_GROUPS[g].forEach(m => {
-            const num = collection[`${g}_${m}`] || 0;
+            const num = collection[getSafeKey(g, m)] || 0;
             if(num > 1) totalDupes += (num - 1);
         });
     }
@@ -727,8 +798,8 @@ function globalExchange() {
     const unownedPool = [];
     for(let g in GIRL_GROUPS) {
         GIRL_GROUPS[g].forEach(m => {
-            if(!collection[`${g}_${m}`]) {
-                unownedPool.push({g, m, k:`${g}_${m}`});
+            if(!collection[getSafeKey(g, m)]) {
+                unownedPool.push({g, m, k: getSafeKey(g, m)});
             }
         });
     }
@@ -737,12 +808,11 @@ function globalExchange() {
     
     if(!confirm(`確定要消耗 5 張任意重複卡片，換取 1 張【保證未擁有】的卡片嗎？`)) return;
     
-    // 開始全局扣除 5 張重複卡
     let neededDeduction = 5;
     for(let g in GIRL_GROUPS) {
         for(let i=0; i<GIRL_GROUPS[g].length; i++) {
             const m = GIRL_GROUPS[g][i];
-            const k = `${g}_${m}`;
+            const k = getSafeKey(g, m);
             const num = collection[k] || 0;
             if(num > 1) {
                 const dupesAvailable = num - 1;
@@ -755,7 +825,6 @@ function globalExchange() {
         if(neededDeduction <= 0) break;
     }
     
-    // 從未擁有池隨機抽一張
     const target = unownedPool[Math.floor(Math.random() * unownedPool.length)];
     collection[target.k] = (collection[target.k] || 0) + 1;
     
@@ -882,11 +951,12 @@ window.handleImgError = function(img, member) {
 
 function drawCards(count) {
     const pool = [];
-    // 【修復：從抽卡池徹底過濾掉已經完美集滿的團體】
+    
+    // 【完美防呆】：過濾掉已經集滿的團體
     for(let g in GIRL_GROUPS) {
-        const isComp = GIRL_GROUPS[g].every(m => collection[`${g}_${m}`]);
+        const isComp = GIRL_GROUPS[g].every(m => collection[getSafeKey(g, m)]);
         if (!isComp) {
-            GIRL_GROUPS[g].forEach(m => pool.push({g, m, k:`${g}_${m}`}));
+            GIRL_GROUPS[g].forEach(m => pool.push({g, m, k: getSafeKey(g, m)}));
         }
     }
     
@@ -922,8 +992,8 @@ function renderCollection() {
     container.innerHTML = "";
     
     for(let g in GIRL_GROUPS) {
-        const isComp = GIRL_GROUPS[g].every(m => collection[`${g}_${m}`]);
-        const ownedCount = GIRL_GROUPS[g].filter(m => collection[`${g}_${m}`]).length;
+        const isComp = GIRL_GROUPS[g].every(m => collection[getSafeKey(g, m)]);
+        const ownedCount = GIRL_GROUPS[g].filter(m => collection[getSafeKey(g, m)]).length;
         
         const sec = document.createElement('div');
         sec.className = `group-section ${isComp?'group-complete':''}`;
@@ -938,7 +1008,7 @@ function renderCollection() {
         grid.className = "member-grid";
         
         GIRL_GROUPS[g].forEach(m => {
-            const num = collection[`${g}_${m}`] || 0;
+            const num = collection[getSafeKey(g, m)] || 0;
             const imgUrl = getCardImage(g, m);
             
             const card = document.createElement('div');

@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>K-Pop 蒐集戰 V70_Final</title>
+    <title>K-Pop 蒐集戰 V71_Auth</title>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-auth-compat.js"></script>
     <style>
         :root { 
             --bg-dark: #121212;
@@ -226,7 +227,7 @@
 </div>
 
 <div id="page-login" class="page active">
-    <h1 style="color:var(--accent);">K-Pop 蒐集戰 V70</h1>
+    <h1 style="color:var(--accent);">K-Pop 蒐集戰 V71</h1>
     <p style="color:#888; font-size:12px;">多樣化歌詞題庫 • 完整注音表 • 圖片優化</p>
     <input type="text" id="inName" placeholder="你的暱稱" style="width:80%; padding:15px; background:#222; border:1px solid #444; color:white; border-radius:8px; margin-bottom:10px;">
     <input type="text" id="inRoom" placeholder="房間號碼" style="width:80%; padding:15px; background:#222; border:1px solid #444; color:white; border-radius:8px; margin-bottom:20px;">
@@ -608,25 +609,9 @@ function removeSingerOnce(name) {
 }
 
 const firebaseConfig = { apiKey: "AIzaSyBjYdhxIQ_LGoNHiAkygjkIqWsb8NgF0s8", authDomain: "ktv-game.firebaseapp.com", databaseURL: "https://ktv-game-default-rtdb.asia-southeast1.firebasedatabase.app", projectId: "ktv-game", storageBucket: "ktv-game.firebasestorage.app", messagingSenderId: "903538372328", appId: "1:903538372328:web:2456e55fcd41f0899f635d" };
-// ⚠️ 安全提醒（第 8 項）：以下 config 放前端是正常的，但「資料庫讀寫權限」必須在
-// Firebase 主控台 > Realtime Database > 規則 設定，無法在此檔案內修正。
-// 若目前規則為全開（".read": true, ".write": true），任何人都能讀改刪整個資料庫。
-// 建議至少限制在 rooms 路徑下，並加上資料驗證，例如：
-// {
-//   "rules": {
-//     "rooms": {
-//       "$room": {
-//         "players": {
-//           "$player": {
-//             ".read": true,
-//             ".write": true,
-//             ".validate": "newData.hasChildren(['name'])"
-//           }
-//         }
-//       }
-//     }
-//   }
-// }
+// ⚠️ 安全提醒：web config 放前端是正常的，真正的防線是 Realtime Database「規則」。
+// 本版已搭配「匿名登入」，請務必到 Firebase 主控台把規則改成需要 auth != null
+// （見對話中提供的規則 JSON），否則資料庫仍是全開狀態。
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
@@ -635,49 +620,52 @@ function initGame() {
     const rawRoom = document.getElementById('inRoom').value.trim();
     if (!rawName || !rawRoom) return alert("請填寫資訊");
 
-    // 第 1 項：擋掉 Firebase 不允許的字元，避免 db.ref() 同步崩潰
+    // 擋掉 Firebase 不允許的字元，避免 db.ref() 同步崩潰
     if (FIREBASE_ILLEGAL.test(rawName) || FIREBASE_ILLEGAL.test(rawRoom)) {
         return alert("暱稱與房號不能包含這些字元： .  #  $  [  ]  / 以及控制字元");
     }
     myName = rawName;
     myRoom = rawRoom;
 
-    const playerRef = db.ref(`rooms/${myRoom}/players/${myName}`);
-    playerRef.once('value').then(snap => {
-        const data = snap.val() || {};
+    // ====== 新增：先做匿名登入，才符合需要 auth != null 的安全規則 ======
+    firebase.auth().signInAnonymously().then(() => {
+        const playerRef = db.ref(`rooms/${myRoom}/players/${myName}`);
+        return playerRef.once('value').then(snap => {
+            const data = snap.val() || {};
 
-        if (data.collection || data.singers || data.singerHistory) {
-            collection = data.collection || {};
-            singers = data.singers || { m: [], f: [], g: [] };
-            singerHistory = data.singerHistory || { m: [], f: [], g: [] };
-        } else {
-            collection = JSON.parse(localStorage.getItem(`v70_col_${myName}`)) || {};
-            singers = JSON.parse(localStorage.getItem(`v70_sin_${myName}`)) || { m: [], f: [], g: [] };
-            singerHistory = JSON.parse(localStorage.getItem(`v70_his_${myName}`)) || { m: [], f: [], g: [] };
-        }
+            if (data.collection || data.singers || data.singerHistory) {
+                collection = data.collection || {};
+                singers = data.singers || { m: [], f: [], g: [] };
+                singerHistory = data.singerHistory || { m: [], f: [], g: [] };
+            } else {
+                collection = JSON.parse(localStorage.getItem(`v70_col_${myName}`)) || {};
+                singers = JSON.parse(localStorage.getItem(`v70_sin_${myName}`)) || { m: [], f: [], g: [] };
+                singerHistory = JSON.parse(localStorage.getItem(`v70_his_${myName}`)) || { m: [], f: [], g: [] };
+            }
 
-        ['m', 'f', 'g'].forEach(t => {
-            if (!singerHistory[t]) singerHistory[t] = [];
-            if (!singers[t]) singers[t] = [];
+            ['m', 'f', 'g'].forEach(t => {
+                if (!singerHistory[t]) singerHistory[t] = [];
+                if (!singers[t]) singers[t] = [];
+            });
+
+            document.getElementById('display-name').innerText = myName;
+            document.getElementById('display-room').innerText = myRoom;
+            document.getElementById('ui-header').style.display = 'flex';
+
+            // 避免重複綁定 ranking 監聽器
+            if (rankingRef) rankingRef.off();
+            rankingRef = db.ref(`rooms/${myRoom}/players`);
+            rankingRef.on('value', s => updateRanking(s.val()));
+
+            renderCollection();
+            showPage('page-home');
+            // 初始寫入交給 syncData 一次處理
+            syncData();
         });
-
-        document.getElementById('display-name').innerText = myName;
-        document.getElementById('display-room').innerText = myRoom;
-        document.getElementById('ui-header').style.display = 'flex';
-
-        // 第 9 項：避免重複綁定 ranking 監聽器
-        if (rankingRef) rankingRef.off();
-        rankingRef = db.ref(`rooms/${myRoom}/players`);
-        rankingRef.on('value', s => updateRanking(s.val()));
-
-        renderCollection();
-        showPage('page-home');
-        // 第 9 項：初始寫入交給 syncData 一次處理，避免重複 update
-        syncData();
     }).catch(e => {
-        // 第 2 項：非同步錯誤改用 .catch 處理
-        console.error("讀取房間資料失敗:", e);
-        alert("連線失敗，請檢查網路後重試");
+        // 匿名登入失敗或讀取房間資料失敗都會進來這裡
+        console.error("連線/登入失敗:", e);
+        alert("連線失敗，請檢查網路後重試（若持續失敗，請確認 Firebase 已啟用『匿名』登入方式）");
     });
 }
 
@@ -705,14 +693,14 @@ function syncData() {
 
     if (myName && myRoom) {
         db.ref(`rooms/${myRoom}/players/${myName}`).update({
-            name: myName, // 第 9 項：併入此處一次寫入，ranking 才有名稱
+            name: myName,
             completedGroups: comp,
             cardCount: Object.values(collection).reduce((a, b) => a + b, 0),
             collection: collection,
             singers: singers,
             singerHistory: singerHistory,
             lastActive: Date.now()
-        }).catch(e => console.error("Firebase 同步失敗:", e)); // 第 2 項
+        }).catch(e => console.error("Firebase 同步失敗:", e));
     }
 
     localStorage.setItem(`v70_col_${myName}`, JSON.stringify(collection));
@@ -736,7 +724,7 @@ function renderHomeSingers() {
 
     for(let name in counts) {
         const item = counts[name];
-        // 第 3 項：用 textContent，避免歌手名稱含 HTML 造成注入
+        // 用 textContent，避免歌手名稱含 HTML 造成注入
         const span = document.createElement('span');
         span.className = `tag-display ${item.type}`;
         span.textContent = `${name} x${item.count}`;
@@ -776,7 +764,7 @@ function rerollTask() {
     if(all.length < 1) return alert("沒有歌手可以消耗");
 
     const target = all[Math.floor(Math.random() * all.length)];
-    removeSingerOnce(target); // 第 6 項：集中為單一移除邏輯
+    removeSingerOnce(target);
 
     syncData();
     showToast(`消耗了 1 次 ${target}`);
@@ -794,7 +782,7 @@ function redeemSingers() {
 
     if(!confirm("確定要消耗 10 位不同歌手，換取 2 張【保證全新未擁有】的卡片嗎？")) return;
 
-    uniqueNames.slice(0, 10).forEach(name => removeSingerOnce(name)); // 第 6 項
+    uniqueNames.slice(0, 10).forEach(name => removeSingerOnce(name));
 
     const drawn = [];
     for(let i=0; i<2; i++) {
@@ -804,7 +792,7 @@ function redeemSingers() {
         drawn.push(p);
     }
 
-    renderDrawResult(drawn); // 重構：共用抽卡結果渲染
+    renderDrawResult(drawn);
     syncData();
     showToast("兌換成功！獲得 2 張全新成員卡！");
 }
@@ -836,7 +824,7 @@ function globalExchange() {
     const target = unownedPool[Math.floor(Math.random() * unownedPool.length)];
     collection[target.k] = (collection[target.k] || 0) + 1;
 
-    renderDrawResult([target]); // 重構：共用抽卡結果渲染
+    renderDrawResult([target]);
     syncData();
     showToast("兌換成功！獲得 1 張全新成員卡！");
 }
@@ -935,10 +923,6 @@ function finalizeSettlement() {
 }
 
 // ==================== 圖片與抽卡處理 ====================
-// 第 4 項：圖片檔名正規化集中於此。
-// 注意：這套規則「刻意」與 getSafeKey（資料庫 key）不同——
-// 檔名只能用英數與底線，且 member 沿用「僅替換空白」的舊規則，
-// 以免改動後對不上你既有的 ./images/*.jpg 檔。
 function normalizeGroupForFile(group) {
     return group.replace(/ /g, '_').replace(/[^a-zA-Z0-9_]/g, '');
 }
@@ -953,7 +937,6 @@ window.handleImgError = function(img, member) {
     img.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='400' style='background:%23222;'><text x='50%25' y='50%25' font-size='24' fill='%23ff4081' dominant-baseline='middle' text-anchor='middle'>" + member + "</text></svg>";
 };
 
-// 重構＋第 3 項：抽卡/兌換結果統一渲染，改用 DOM API 避免名稱注入
 function renderDrawResult(cards) {
     const resDiv = document.getElementById('draw-results');
     resDiv.innerHTML = "";
@@ -1002,7 +985,7 @@ function drawCards(count) {
         collection[p.k] = (collection[p.k] || 0) + 1;
         drawn.push(p);
     }
-    renderDrawResult(drawn); // 重構：共用渲染
+    renderDrawResult(drawn);
 }
 
 function renderCollection() {
@@ -1068,7 +1051,7 @@ function updateRanking(data) {
     const list = document.getElementById('ranking-list');
     list.innerHTML = "";
     Object.values(data || {})
-        // 第 5 項：先比 👑，平手再比張數
+        // 先比 👑，平手再比張數
         .sort((a, b) => (b.completedGroups || 0) - (a.completedGroups || 0)
                      || (b.cardCount || 0) - (a.cardCount || 0))
         .forEach((p, i) => {
@@ -1078,7 +1061,7 @@ function updateRanking(data) {
             const row = document.createElement('div');
             row.style.cssText = "display:flex; justify-content:space-between; margin-bottom:5px;";
 
-            // 第 3 項：textContent 防止暱稱注入
+            // textContent 防止暱稱注入
             const left = document.createElement('span');
             left.textContent = `${i + 1}. ${p.name || '???'}`;
             const right = document.createElement('span');

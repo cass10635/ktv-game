@@ -201,6 +201,23 @@
             left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; z-index: 1000; display: none;
         }
         
+        /* NEW 標籤樣式 */
+        .draw-card-wrap { position: relative; }
+        .new-badge {
+            position: absolute; top: -6px; left: -6px;
+            background: linear-gradient(135deg, #ffd54f, #ff9800);
+            color: #222; font-size: 11px; font-weight: 900;
+            padding: 2px 7px; border-radius: 10px;
+            box-shadow: 0 0 8px rgba(255,193,7,0.9);
+            letter-spacing: 0.5px; z-index: 2;
+            animation: newPulse 1s ease-in-out infinite alternate;
+        }
+        @keyframes newPulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.12); }
+        }
+        .draw-card-wrap.is-new { border-color: #ffc107 !important; box-shadow: 0 0 12px rgba(255,193,7,0.6); }
+
         /* 抽卡結果的圖片樣式 */
         .draw-card-img {
             width: 100px;
@@ -789,7 +806,7 @@ function redeemSingers() {
         const idx = Math.floor(Math.random() * unownedPool.length);
         const p = unownedPool.splice(idx, 1)[0];
         collection[p.k] = (collection[p.k] || 0) + 1;
-        drawn.push(p);
+        drawn.push({...p, isNew: true});
     }
 
     renderDrawResult(drawn);
@@ -824,7 +841,7 @@ function globalExchange() {
     const target = unownedPool[Math.floor(Math.random() * unownedPool.length)];
     collection[target.k] = (collection[target.k] || 0) + 1;
 
-    renderDrawResult([target]);
+    renderDrawResult([{...target, isNew: true}]);
     syncData();
     showToast("兌換成功！獲得 1 張全新成員卡！");
 }
@@ -942,7 +959,15 @@ function renderDrawResult(cards) {
     resDiv.innerHTML = "";
     cards.forEach(p => {
         const wrap = document.createElement('div');
+        wrap.className = 'draw-card-wrap' + (p.isNew ? ' is-new' : '');
         wrap.style.cssText = "margin:10px; text-align:center; background:#222; padding:10px; border-radius:8px; border:1px solid var(--accent);";
+
+        if (p.isNew) {
+            const badge = document.createElement('div');
+            badge.className = 'new-badge';
+            badge.textContent = 'NEW';
+            wrap.appendChild(badge);
+        }
 
         const img = document.createElement('img');
         img.src = getCardImage(p.g, p.m);
@@ -982,8 +1007,9 @@ function drawCards(count) {
     const drawn = [];
     for(let i=0; i<count; i++) {
         const p = pool[Math.floor(Math.random()*pool.length)];
+        const isNew = !collection[p.k];
         collection[p.k] = (collection[p.k] || 0) + 1;
-        drawn.push(p);
+        drawn.push({...p, isNew});
     }
     renderDrawResult(drawn);
 }

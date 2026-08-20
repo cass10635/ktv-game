@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>K-Pop 蒐集戰 V71_Auth</title>
+    <title>K-Pop 蒐集戰 V72_Auth</title>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-auth-compat.js"></script>
@@ -120,10 +120,19 @@
 
         /* 統一歷史標籤區 */
         .history-tags-area {
-            margin-top: 10px;
+            margin-top: 8px;
             display: flex; flex-wrap: wrap; gap: 6px; 
             background: #111; padding: 8px; border-radius: 8px;
+            /* V71: 標籤無數量上限，改用捲動顯示全部 */
+            max-height: 190px; overflow-y: auto; align-content: flex-start;
         }
+        .tag-tool-row {
+            display: flex; align-items: center; gap: 8px; margin-top: 10px;
+        }
+        .tag-filter {
+            flex: 1; font-size: 13px !important; padding: 8px !important;
+        }
+        .tag-count { font-size: 11px; color: #888; white-space: nowrap; }
         .quick-tag { 
             font-size: 11px;
             padding: 4px 10px; border-radius: 15px; cursor: pointer; transition: 0.2s; 
@@ -218,6 +227,22 @@
         }
         .draw-card-wrap.is-new { border-color: #ffc107 !important; box-shadow: 0 0 12px rgba(255,193,7,0.6); }
 
+        /* 蒐集冊：重複卡片區 */
+        #book-summary {
+            background: #1a1a1a; border: 1px solid #333; border-radius: 12px;
+            padding: 12px; margin-bottom: 20px; text-align: left;
+        }
+        .dupe-wrap {
+            display: flex; flex-wrap: wrap; gap: 6px;
+            max-height: 160px; overflow-y: auto; margin-top: 8px;
+        }
+        .dupe-chip {
+            font-size: 11px; padding: 4px 8px; border-radius: 12px; cursor: pointer;
+            background: rgba(255, 215, 0, 0.12); color: var(--gold); border: 1px solid var(--gold);
+        }
+        .dupe-chip:hover { background: rgba(255, 215, 0, 0.25); }
+        .member-card.has-dupe { border-color: var(--gold); }
+
         /* 抽卡結果的圖片樣式 */
         .draw-card-img {
             width: 100px;
@@ -244,7 +269,7 @@
 </div>
 
 <div id="page-login" class="page active">
-    <h1 style="color:var(--accent);">K-Pop 蒐集戰 V71</h1>
+    <h1 style="color:var(--accent);">K-Pop 蒐集戰 V72</h1>
     <p style="color:#888; font-size:12px;">多樣化歌詞題庫 • 完整注音表 • 圖片優化</p>
     <input type="text" id="inName" placeholder="你的暱稱" style="width:80%; padding:15px; background:#222; border:1px solid #444; color:white; border-radius:8px; margin-bottom:10px;">
     <input type="text" id="inRoom" placeholder="房間號碼" style="width:80%; padding:15px; background:#222; border:1px solid #444; color:white; border-radius:8px; margin-bottom:20px;">
@@ -267,6 +292,7 @@
     </div>
 
     <button class="btn-task" onclick="startTask()">🎤 抽取挑戰任務</button>
+    <button id="btn-resume-task" class="btn-sec" style="display:none; border-color:var(--highlight); color:var(--highlight); margin-top:10px;" onclick="resumeTask()">↩️ 回到目前題目</button>
     <button class="btn-book" onclick="showPage('page-book')">📕 開啟成員蒐集冊</button>
     
     <div style="margin: 20px 0;">
@@ -288,7 +314,8 @@
     </div>
     <button class="btn-main" onclick="goToSettlement()">✅ 挑戰成功 (前往登錄)</button>
     <button class="btn-sec" onclick="rerollTask()">🎲 消耗1位隨機歌手重抽</button>
-    <button class="btn-sec" onclick="showPage('page-home')">放棄返回</button>
+    <button class="btn-sec" style="border-color:var(--highlight); color:var(--highlight);" onclick="keepAndHome()">🏠 回主畫面（保留題目）</button>
+    <button class="btn-sec" onclick="abandonTask()">🚫 放棄返回（題目作廢）</button>
 </div>
 
 <div id="page-settle" class="page">
@@ -309,6 +336,7 @@
         <h2 style="margin:0;">成員蒐集冊</h2>
         <button class="btn-sec" style="width:auto; margin:0;" onclick="showPage('page-home')">返回</button>
     </div>
+    <div id="book-summary"></div>
     <div id="collection-container"></div>
 </div>
 
@@ -604,16 +632,36 @@ function getUnownedPool() {
     }
     return pool;
 }
-// 計算可消耗的重複卡片總數
-function getTotalDupes() {
+// 計算「不重複」卡片張數（可用於自己或其他玩家的 collection）
+function countUniqueOwned(col) {
+    col = col || {};
+    let n = 0;
+    for (let g in GIRL_GROUPS) {
+        GIRL_GROUPS[g].forEach(m => { if ((col[getSafeKey(g, m)] || 0) > 0) n++; });
+    }
+    return n;
+}
+// 計算「重複」卡片張數（超出第一張的部分）
+function countDupes(col) {
+    col = col || {};
     let total = 0;
     for (let g in GIRL_GROUPS) {
         GIRL_GROUPS[g].forEach(m => {
-            const num = collection[getSafeKey(g, m)] || 0;
+            const num = col[getSafeKey(g, m)] || 0;
             if (num > 1) total += (num - 1);
         });
     }
     return total;
+}
+// 卡池總數（所有成員數）
+function getTotalMemberCount() {
+    let n = 0;
+    for (let g in GIRL_GROUPS) n += GIRL_GROUPS[g].length;
+    return n;
+}
+// 計算可消耗的重複卡片總數
+function getTotalDupes() {
+    return countDupes(collection);
 }
 // 從 m/f/g 任一清單移除一筆指定歌手（只移除一筆），回傳是否成功
 function removeSingerOnce(name) {
@@ -665,6 +713,13 @@ function initGame() {
                 if (!singers[t]) singers[t] = [];
             });
 
+            // 還原「保留中的題目」：優先讀雲端，其次讀本機（不影響任何既有資料）
+            let savedTask = data.currentTask || null;
+            if (!savedTask) {
+                try { savedTask = JSON.parse(localStorage.getItem(`v70_task_${myName}`)); } catch (e) { savedTask = null; }
+            }
+            currentTask = (savedTask && savedTask.t) ? savedTask : null;
+
             document.getElementById('display-name').innerText = myName;
             document.getElementById('display-room').innerText = myRoom;
             document.getElementById('ui-header').style.display = 'flex';
@@ -675,6 +730,7 @@ function initGame() {
             rankingRef.on('value', s => updateRanking(s.val()));
 
             renderCollection();
+            updateResumeBtn();
             showPage('page-home');
             // 初始寫入交給 syncData 一次處理
             syncData();
@@ -708,11 +764,15 @@ function syncData() {
 
     renderHomeSingers();
 
+    updateResumeBtn();
+
     if (myName && myRoom) {
         db.ref(`rooms/${myRoom}/players/${myName}`).update({
             name: myName,
             completedGroups: comp,
-            cardCount: Object.values(collection).reduce((a, b) => a + b, 0),
+            cardCount: Object.values(collection).reduce((a, b) => a + b, 0), // 總張數（含重複，保留給舊版相容）
+            uniqueCards: countUniqueOwned(collection),                        // 不重複張數（排行榜顯示用）
+            dupeCards: countDupes(collection),                                // 重複張數
             collection: collection,
             singers: singers,
             singerHistory: singerHistory,
@@ -755,7 +815,12 @@ function getUniqueSingerCount() {
 }
 
 // ==================== 任務流程 ====================
-function startTask() {
+function startTask(force) {
+    // 已有保留中的題目時，先確認避免誤觸洗掉題目
+    if(currentTask && !force) {
+        if(!confirm("目前還有保留中的題目，重新抽取會放棄它。確定要重抽嗎？")) return;
+    }
+
     const t = TASKS[Math.floor(Math.random() * TASKS.length)];
     let extra = "";
     
@@ -769,11 +834,67 @@ function startTask() {
         extra = `\n"${randomLine}"`;
     }
 
-    currentTask = { ...t, extra };
-    document.getElementById('task-desc').innerText = t.t;
-    document.getElementById('task-extra').innerText = extra;
-    document.getElementById('task-reward').innerText = `獎勵：${t.n} 張卡片`;
+    // 明確組出乾淨物件，避免 undefined 欄位讓 Firebase 寫入失敗
+    currentTask = { t: t.t, n: t.n, type: t.type || null, extra: extra };
+    persistTask();
+    renderTaskPage();
     showPage('page-challenge');
+}
+
+// 依 currentTask 把挑戰頁畫出來（重新整理後也能還原）
+function renderTaskPage() {
+    if(!currentTask) return;
+    document.getElementById('task-desc').innerText = currentTask.t;
+    document.getElementById('task-extra').innerText = currentTask.extra || "";
+    document.getElementById('task-reward').innerText = `獎勵：${currentTask.n} 張卡片`;
+}
+
+// 保留題目、單純回主畫面
+function keepAndHome() {
+    updateResumeBtn();
+    showToast("題目已保留，可從主畫面回到原題目");
+    showPage('page-home');
+}
+
+// 放棄題目（題目作廢，下次要重新抽）
+function abandonTask() {
+    if(!confirm("確定要放棄這個題目嗎？（放棄後題目會作廢，需要重新抽取）")) return;
+    currentTask = null;
+    persistTask();
+    showPage('page-home');
+}
+
+// 回到保留中的題目
+function resumeTask() {
+    if(!currentTask) {
+        showToast("目前沒有保留中的題目");
+        updateResumeBtn();
+        return;
+    }
+    renderTaskPage();
+    showPage('page-challenge');
+}
+
+// 主畫面「回到目前題目」按鈕顯示與否
+function updateResumeBtn() {
+    const btn = document.getElementById('btn-resume-task');
+    if(btn) btn.style.display = currentTask ? 'block' : 'none';
+}
+
+// 保存目前題目（本機 + 雲端），不會動到 collection / singers / singerHistory
+function persistTask() {
+    if(myName) {
+        try {
+            if(currentTask) localStorage.setItem(`v70_task_${myName}`, JSON.stringify(currentTask));
+            else localStorage.removeItem(`v70_task_${myName}`);
+        } catch(e) { console.warn("本機儲存題目失敗:", e); }
+    }
+    if(myName && myRoom) {
+        db.ref(`rooms/${myRoom}/players/${myName}`)
+          .update({ currentTask: currentTask || null })
+          .catch(e => console.error("題目同步失敗:", e));
+    }
+    updateResumeBtn();
 }
 
 function rerollTask() {
@@ -785,7 +906,7 @@ function rerollTask() {
 
     syncData();
     showToast(`消耗了 1 次 ${target}`);
-    startTask();
+    startTask(true);
 }
 
 function redeemSingers() {
@@ -847,6 +968,7 @@ function globalExchange() {
 }
 
 function goToSettlement() {
+    if(!currentTask) return alert("目前沒有進行中的題目，請先抽取挑戰任務");
     document.getElementById('singer-input-container').innerHTML = "";
     addSingerInputRow();
     showPage('page-settle');
@@ -869,6 +991,10 @@ function addSingerInputRow() {
             <div id="btn-g-${rowId}" class="type-opt g" onclick="setRowType('${rowId}', 'g')">團體</div>
         </div>
         <input type="text" class="input-field" placeholder="輸入歌手名稱..." id="input-${rowId}">
+        <div class="tag-tool-row">
+            <input type="text" class="input-field tag-filter" placeholder="🔍 搜尋歷史歌手" id="filter-${rowId}" oninput="renderAllHistoryTags('${rowId}', this.value)">
+            <span class="tag-count" id="tagcount-${rowId}"></span>
+        </div>
         <div class="history-tags-area" id="tags-${rowId}"></div>
     `;
     
@@ -876,8 +1002,9 @@ function addSingerInputRow() {
     renderAllHistoryTags(rowId);
 }
 
-function renderAllHistoryTags(rowId) {
+window.renderAllHistoryTags = function(rowId, keyword) {
     const container = document.getElementById(`tags-${rowId}`);
+    if(!container) return;
     container.innerHTML = "";
 
     const allTags = [];
@@ -894,18 +1021,34 @@ function renderAllHistoryTags(rowId) {
             seen.add(t.name);
         }
     });
-    
-    uniqueTags.slice(0, 25).forEach(tag => {
+
+    // V71：不再限制顯示數量（原本只顯示前 25 個），全部列出並可搜尋
+    const kw = (keyword || "").trim().toLowerCase();
+    const shown = kw ? uniqueTags.filter(t => t.name.toLowerCase().includes(kw)) : uniqueTags;
+
+    const countEl = document.getElementById(`tagcount-${rowId}`);
+    if(countEl) countEl.textContent = kw ? `${shown.length} / ${uniqueTags.length} 個` : `共 ${uniqueTags.length} 個`;
+
+    if(shown.length === 0) {
+        const empty = document.createElement('span');
+        empty.style.cssText = "font-size:11px; color:#666;";
+        empty.textContent = uniqueTags.length ? "找不到符合的歌手" : "尚無歷史歌手紀錄";
+        container.appendChild(empty);
+        return;
+    }
+
+    shown.forEach(tag => {
         const span = document.createElement('span');
         span.className = `quick-tag t-${tag.type}`;
         span.innerText = tag.name;
         span.onclick = () => {
-            document.getElementById(`input-${rowId}`).value = tag.name;
+            const inp = document.getElementById(`input-${rowId}`);
+            if(inp) inp.value = tag.name;
             setRowType(rowId, tag.type);
         };
         container.appendChild(span);
     });
-}
+};
 
 window.setRowType = function(rowId, type) {
     const row = document.getElementById(`row-${rowId}`);
@@ -919,23 +1062,33 @@ window.setRowType = function(rowId, type) {
 };
 
 function finalizeSettlement() {
+    if(!currentTask) return alert("目前沒有進行中的題目，請先抽取挑戰任務");
+
     const rows = document.querySelectorAll('.singer-input-row');
-    let addedAny = false;
-    
+    const pending = [];
+
     rows.forEach(row => {
-        const name = row.querySelector('input').value.trim();
-        const type = row.dataset.type;
-        if(name) {
-            singers[type].push(name);
-            if(!singerHistory[type].includes(name)) {
-                singerHistory[type].push(name);
-            }
-            addedAny = true;
-        }
+        // 只取這一列的歌手名稱輸入框（避免抓到搜尋框）
+        const input = row.querySelector('.input-field:not(.tag-filter)');
+        const name = input ? input.value.trim() : "";
+        const type = row.dataset.type || 'm';
+        if(name) pending.push({ name, type });
     });
-    
-    if(!addedAny) return alert("請至少輸入一位歌手");
-    drawCards(currentTask.n);
+
+    if(pending.length === 0) return alert("請至少輸入一位歌手");
+
+    // 確認無誤後才寫入，避免中途 return 造成資料不一致
+    pending.forEach(({ name, type }) => {
+        if(!singers[type]) singers[type] = [];
+        if(!singerHistory[type]) singerHistory[type] = [];
+        singers[type].push(name);
+        if(!singerHistory[type].includes(name)) singerHistory[type].push(name);
+    });
+
+    const reward = currentTask.n || 1;
+    currentTask = null;   // 已完成，題目結束
+    persistTask();
+    drawCards(reward);
     syncData();
 }
 
@@ -1014,7 +1167,57 @@ function drawCards(count) {
     renderDrawResult(drawn);
 }
 
+// 蒐集冊上方：不重複張數 + 重複卡片清單
+function renderBookSummary() {
+    const box = document.getElementById('book-summary');
+    if(!box) return;
+    box.innerHTML = "";
+
+    const uniq = countUniqueOwned(collection);
+    const dupes = countDupes(collection);
+
+    const title = document.createElement('div');
+    title.style.cssText = "font-weight:bold; color:var(--highlight); font-size:14px;";
+    title.textContent = `📊 不重複卡片 ${uniq} / ${getTotalMemberCount()} 張`;
+    box.appendChild(title);
+
+    const sub = document.createElement('div');
+    sub.style.cssText = "font-size:13px; color:var(--gold); margin-top:6px;";
+    sub.textContent = `♻️ 重複卡片 ${dupes} 張`;
+    box.appendChild(sub);
+
+    const dupeList = [];
+    for(let g in GIRL_GROUPS) {
+        GIRL_GROUPS[g].forEach(m => {
+            const num = collection[getSafeKey(g, m)] || 0;
+            if(num > 1) dupeList.push({ g, m, extra: num - 1 });
+        });
+    }
+    dupeList.sort((a, b) => b.extra - a.extra);
+
+    if(dupeList.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.cssText = "font-size:12px; color:#888; margin-top:6px;";
+        empty.textContent = "目前沒有重複的卡片";
+        box.appendChild(empty);
+        return;
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = "dupe-wrap";
+    dupeList.forEach(d => {
+        const chip = document.createElement('span');
+        chip.className = "dupe-chip";
+        chip.textContent = `${d.m}（${d.g}）+${d.extra}`;
+        chip.onclick = () => openCardView(d.g, d.m);
+        wrap.appendChild(chip);
+    });
+    box.appendChild(wrap);
+}
+
 function renderCollection() {
+    renderBookSummary();
+
     const container = document.getElementById('collection-container');
     if(!container) return;
     
@@ -1023,33 +1226,66 @@ function renderCollection() {
     for(let g in GIRL_GROUPS) {
         const isComp = isGroupComplete(g);
         const ownedCount = GIRL_GROUPS[g].filter(m => collection[getSafeKey(g, m)]).length;
+        const groupDupes = GIRL_GROUPS[g].reduce((s, m) => {
+            const n = collection[getSafeKey(g, m)] || 0;
+            return s + (n > 1 ? n - 1 : 0);
+        }, 0);
         
         const sec = document.createElement('div');
         sec.className = `group-section ${isComp?'group-complete':''}`;
-        sec.innerHTML = `
-            <div class="group-header">
-                <div class="group-name">${g} ${isComp?'👑':''}</div>
-                <div style="font-size:12px; color:#aaa;">${ownedCount} / ${GIRL_GROUPS[g].length}</div>
-            </div>
-        `;
+
+        // 用 DOM 產生，避免團名／成員名含特殊字元時破版
+        const header = document.createElement('div');
+        header.className = "group-header";
+
+        const nameEl = document.createElement('div');
+        nameEl.className = "group-name";
+        nameEl.textContent = isComp ? `${g} 👑` : g;
+
+        const cntEl = document.createElement('div');
+        cntEl.style.cssText = "font-size:12px; color:#aaa; text-align:right;";
+        cntEl.textContent = `${ownedCount} / ${GIRL_GROUPS[g].length}`;
+        if(groupDupes > 0) {
+            const d = document.createElement('div');
+            d.style.cssText = "font-size:10px; color:var(--gold);";
+            d.textContent = `重複 +${groupDupes}`;
+            cntEl.appendChild(d);
+        }
+
+        header.append(nameEl, cntEl);
+        sec.appendChild(header);
         
         const grid = document.createElement('div');
         grid.className = "member-grid";
         
         GIRL_GROUPS[g].forEach(m => {
             const num = collection[getSafeKey(g, m)] || 0;
-            const imgUrl = getCardImage(g, m);
             
             const card = document.createElement('div');
-            card.className = `member-card ${num?'owned':''}`;
-            
-            card.innerHTML = `
-                <img src="${imgUrl}" class="card-thumb" onerror="handleImgError(this, '${m}')" style="opacity:${num?1:0.3}; margin-bottom:5px;">
-                <div class="member-name" style="font-size:12px; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%; text-align:center;">${num ? m : '?'}</div>
-                ${num ? `<div class="member-count" style="font-size:10px; color:var(--accent);">x${num}</div>` : ''}
-            `;
-            
+            card.className = `member-card ${num?'owned':''}${num>1?' has-dupe':''}`;
+
+            const img = document.createElement('img');
+            img.className = "card-thumb";
+            img.src = getCardImage(g, m);
+            img.style.opacity = num ? 1 : 0.3;
+            img.style.marginBottom = "5px";
+            img.onerror = function() { handleImgError(this, m); };
+
+            const nameDiv = document.createElement('div');
+            nameDiv.className = "member-name";
+            nameDiv.style.cssText = "font-size:12px; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%; text-align:center;";
+            nameDiv.textContent = num ? m : '?';
+
+            card.append(img, nameDiv);
+
             if(num > 0) {
+                const cnt = document.createElement('div');
+                cnt.className = "member-count";
+                cnt.style.cssText = num > 1
+                    ? "font-size:10px; font-weight:900; color:var(--gold);"
+                    : "font-size:10px; color:var(--accent);";
+                cnt.textContent = `x${num}`;
+                card.appendChild(cnt);
                 card.onclick = () => openCardView(g, m);
             }
             grid.appendChild(card);
@@ -1076,13 +1312,20 @@ function closeCardView() { document.getElementById('card-view-modal').style.disp
 function updateRanking(data) {
     const list = document.getElementById('ranking-list');
     list.innerHTML = "";
+    // 只計算「不重複」張數：優先由 collection 精算，沒有才退回同步欄位
+    const uniqOf = (p) => {
+        if (p && p.collection) return countUniqueOwned(p.collection);
+        if (p && typeof p.uniqueCards === 'number') return p.uniqueCards;
+        return 0;
+    };
+
     Object.values(data || {})
-        // 先比 👑，平手再比張數
+        // 先比 👑，平手再比不重複張數
         .sort((a, b) => (b.completedGroups || 0) - (a.completedGroups || 0)
-                     || (b.cardCount || 0) - (a.cardCount || 0))
+                     || uniqOf(b) - uniqOf(a))
         .forEach((p, i) => {
             const comp = p.completedGroups || 0;
-            const cards = p.cardCount || 0;
+            const cards = uniqOf(p);
 
             const row = document.createElement('div');
             row.style.cssText = "display:flex; justify-content:space-between; margin-bottom:5px;";
@@ -1091,7 +1334,7 @@ function updateRanking(data) {
             const left = document.createElement('span');
             left.textContent = `${i + 1}. ${p.name || '???'}`;
             const right = document.createElement('span');
-            right.textContent = `${comp} 👑 / ${cards}張`;
+            right.textContent = `${comp} 👑 / ${cards}張（不重複）`;
 
             row.append(left, right);
             list.appendChild(row);

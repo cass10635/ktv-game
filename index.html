@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>K-Pop 蒐集戰 V72_Auth</title>
+    <title>K-Pop 蒐集戰 V73</title>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-auth-compat.js"></script>
@@ -252,6 +252,25 @@
             object-position: center;
             border: 2px solid white;
         }
+        /* 累積型題目（數字／動物／姓氏／顏色／植物） */
+        .collect-box {
+            background: #1e1e1e; border: 1px solid var(--gold); border-radius: 10px;
+            padding: 15px; margin-bottom: 15px; text-align: left;
+        }
+        .collect-title { font-size: 15px; font-weight: bold; color: var(--gold); margin-bottom: 8px; }
+        .collect-hint { font-size: 12px; color: #aaa; margin: 8px 0; line-height: 1.6; }
+        .collect-used {
+            display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+            background: #111; padding: 8px; border-radius: 8px;
+            max-height: 150px; overflow-y: auto; align-content: flex-start;
+        }
+        .used-tag {
+            font-size: 12px; padding: 4px 10px; border-radius: 15px; cursor: pointer;
+            border: 1px solid var(--gold); color: var(--gold);
+            background: rgba(255, 215, 0, 0.1); transition: 0.2s;
+        }
+        .used-tag:hover { background: rgba(255, 215, 0, 0.28); }
+        .collect-preview { font-size: 13px; margin-top: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -262,15 +281,17 @@
     <div class="player-info">
         <div id="display-name" style="color:var(--highlight); font-weight:bold;"></div>
         <div style="font-size:10px; color:#888;">ROOM: <span id="display-room"></span></div>
+        <div id="sync-status" style="font-size:10px; margin-top:2px; cursor:pointer;" onclick="forceSync()">☁️ 檢查中…</div>
     </div>
     <div style="text-align: right;">
         <div class="score-display" id="total-groups-completed">0 👑</div>
+        <div id="header-card-count" style="font-size:11px; color:#aaa;">0 張</div>
     </div>
 </div>
 
 <div id="page-login" class="page active">
-    <h1 style="color:var(--accent);">K-Pop 蒐集戰 V72</h1>
-    <p style="color:#888; font-size:12px;">多樣化歌詞題庫 • 完整注音表 • 圖片優化</p>
+    <h1 style="color:var(--accent);">K-Pop 蒐集戰 V73</h1>
+    <p style="color:#888; font-size:12px;">主畫面即時統計 • 累積型題目 • 自動歌手分類</p>
     <input type="text" id="inName" placeholder="你的暱稱" style="width:80%; padding:15px; background:#222; border:1px solid #444; color:white; border-radius:8px; margin-bottom:10px;">
     <input type="text" id="inRoom" placeholder="房間號碼" style="width:80%; padding:15px; background:#222; border:1px solid #444; color:white; border-radius:8px; margin-bottom:20px;">
     <button class="btn-main" onclick="initGame()">開始挑戰</button>
@@ -291,11 +312,17 @@
         </button>
     </div>
 
+    <div id="card-stat-box" style="background:#1a1a1a; border:1px solid #333; border-radius:12px; padding:12px 15px; margin-bottom:15px; text-align:left;">
+        <strong style="color:var(--highlight); font-size:14px;">🃏 我的卡片統計</strong>
+        <div id="home-card-stat" style="margin-top:8px; font-size:13px; color:#ddd; line-height:1.8;"></div>
+    </div>
+
     <button class="btn-task" onclick="startTask()">🎤 抽取挑戰任務</button>
     <button id="btn-resume-task" class="btn-sec" style="display:none; border-color:var(--highlight); color:var(--highlight); margin-top:10px;" onclick="resumeTask()">↩️ 回到目前題目</button>
     <button class="btn-book" onclick="showPage('page-book')">📕 開啟成員蒐集冊</button>
     
     <div style="margin: 20px 0;">
+        <button class="btn-sec" onclick="forceSync()" style="border-color:var(--highlight); color:var(--highlight);">☁️ 立即備份到雲端</button>
         <button class="btn-sec" onclick="location.reload()" style="margin-top:10px;">登出系統</button>
     </div>
 
@@ -311,6 +338,7 @@
         <div id="task-desc" style="font-size:24px; font-weight:bold; margin-bottom:10px;"></div>
         <div id="task-extra" style="font-size:28px; color:var(--gold); font-weight:900; white-space: pre-wrap;"></div>
         <p id="task-reward" style="color:#aaa;"></p>
+        <div id="task-collect-info" style="display:none; text-align:left; font-size:13px; color:#aaa; border-top:1px dashed #444; padding-top:10px; margin-top:5px;"></div>
     </div>
     <button class="btn-main" onclick="goToSettlement()">✅ 挑戰成功 (前往登錄)</button>
     <button class="btn-sec" onclick="rerollTask()">🎲 消耗1位隨機歌手重抽</button>
@@ -320,6 +348,7 @@
 
 <div id="page-settle" class="page">
     <h2 style="color:var(--group);">歌手登錄結算</h2>
+    <div id="collect-box" style="display:none;"></div>
     <p style="color:#888; font-size:14px;">點擊下方標籤可快速輸入</p>
     
     <div id="singer-input-container"></div>
@@ -403,11 +432,18 @@ const GIRL_GROUPS = {
 };
 
 const TASKS = [
-    { t: "唱一位【女歌手】的歌", n: 1, type: "zy" },
-    { t: "唱一位【男歌手】的歌", n: 1, type: "zy" },
-    { t: "唱一個【團體】的歌", n: 1, type: "zy" },
+    // st = 結算頁預設的歌手類型（m 男 / f 女 / g 團體）
+    { t: "唱一位【女歌手】的歌", n: 1, type: "zy", st: "f" },
+    { t: "唱一位【男歌手】的歌", n: 1, type: "zy", st: "m" },
+    { t: "唱一個【團體】的歌", n: 1, type: "zy", st: "g" },
+    { t: "唱一位【非台灣歌手】的歌", n: 1, type: "zy" },
     { t: "【隨意唱】一首歌", n: 1 },
-    { t: "歌名要有數字：", n: 2, type: "num" },
+    // collect 型：基礎 1 張，累積不同答案達 step 個就多 1 張
+    { t: "歌名要有【數字】", n: 1, type: "collect", ck: "num" },
+    { t: "歌名要有【動物】", n: 1, type: "collect", ck: "animal" },
+    { t: "歌名要有【姓氏】", n: 1, type: "collect", ck: "surname" },
+    { t: "歌名要有【顏色】", n: 1, type: "collect", ck: "color" },
+    { t: "歌名要有【植物】", n: 1, type: "collect", ck: "plant" },
     { t: "歌曲【非中文】(外語歌)", n: 2 },
     { t: "歌名【非中文】", n: 2 },
     { t: "上一首歌字尾【注音】接龍", n: 2 },
@@ -596,12 +632,29 @@ const VALID_ZHUYIN = [
     "ㄐㄩ", "ㄐㄩㄝ", "ㄐㄩㄢ", "ㄐㄩㄣ"
 ];
 
-const NUM_OPTIONS = ["0","1","2","3","4","5","6","7","8","9","10","百","千","萬"];
+// ==================== 累積型題目設定 ====================
+// step：每累積「step 個不同答案」就多給 1 張卡片（基礎 1 張）
+const COLLECT_META = {
+    num:     { label: "數字", step: 3, ph: "例如：3、十、百、萬" },
+    animal:  { label: "動物", step: 5, ph: "例如：貓、麻雀、蝴蝶" },
+    surname: { label: "姓氏", step: 5, ph: "例如：李、周、林" },
+    color:   { label: "顏色", step: 4, ph: "例如：紅、藍色、黑" },
+    plant:   { label: "植物", step: 5, ph: "例如：玫瑰、稻香、柳丁" }
+};
+const COLLECT_KEYS = Object.keys(COLLECT_META);
 
 // ==================== 狀態與初始化 ====================
 let myName = "", myRoom = "", collection = {}, singers = { m: [], f: [], g: [] }, currentTask = null;
 let singerHistory = { m: [], f: [], g: [] }; 
+let collectLog = { num: [], animal: [], surname: [], color: [], plant: [] }; // 累積型題目已使用過的答案
 let rankingRef = null; // 保存 ranking 監聽器，避免重複綁定
+let lastRankingData = {}; // 最近一次雲端排行資料（用來與本機即時狀態合併）
+
+// ===== 雲端同步狀態（手機上紀錄全靠 Firebase，這幾個旗標是保命用的）=====
+let cloudLoaded = false;   // 是否已成功讀完雲端資料。false 時「絕對不寫入」，避免用空白蓋掉舊紀錄
+let pendingSync = false;   // 有變更還沒成功寫上雲端
+let isOnline = true;       // Firebase 連線狀態
+let syncTimer = null;      // 失敗後的自動重試計時器
 
 // Firebase key 不允許 . # $ [ ] / 與控制字元，統一由此過濾
 const FIREBASE_ILLEGAL = /[\.\$#\[\]\/\x00-\x1F\x7F]/;
@@ -673,6 +726,102 @@ function removeSingerOnce(name) {
     return false;
 }
 
+// ===== 資料正規化：Firebase 讀回來的陣列可能變成物件／有空洞，統一整理 =====
+// 這是「卡片張數不會增加 / 玩家沒出現在列表」的主因之一：
+// 一旦資料裡混進 undefined，db.update() 會「同步丟出例外」，
+// 導致後面的 renderCollection() 完全沒執行、雲端也沒寫進去。
+function normalizeCollection(col) {
+    const out = {};
+    if (!col || typeof col !== 'object') return out;
+    for (const k in col) {
+        if (!Object.prototype.hasOwnProperty.call(col, k)) continue;
+        const n = Math.floor(Number(col[k]));
+        if (isFinite(n) && n > 0) out[k] = n;
+    }
+    return out;
+}
+function normalizeNameList(v) {
+    if (!v) return [];
+    const arr = Array.isArray(v) ? v : Object.values(v);
+    const out = [];
+    arr.forEach(x => {
+        if (typeof x !== 'string') return;
+        const t = x.trim();
+        if (t) out.push(t);
+    });
+    return out;
+}
+function normalizeSingerMap(v) {
+    const out = { m: [], f: [], g: [] };
+    if (v && typeof v === 'object') {
+        ['m', 'f', 'g'].forEach(t => { out[t] = normalizeNameList(v[t]); });
+    }
+    return out;
+}
+function normalizeCollectLog(v) {
+    const out = {};
+    COLLECT_KEYS.forEach(k => {
+        const list = normalizeNameList(v ? v[k] : null);
+        const seen = new Set();
+        const uniq = [];
+        list.forEach(x => {
+            const n = normCollect(x);
+            if (n && !seen.has(n)) { seen.add(n); uniq.push(x); }
+        });
+        out[k] = uniq;
+    });
+    return out;
+}
+// 寫入 Firebase 前深層清理：移除 undefined / null / 非法 key，避免同步時丟例外
+function cleanForFirebase(v) {
+    if (Array.isArray(v)) {
+        return v.filter(x => x !== undefined && x !== null).map(cleanForFirebase);
+    }
+    if (v && typeof v === 'object') {
+        const out = {};
+        for (const k in v) {
+            if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
+            const val = v[k];
+            if (val === undefined || val === null) continue;
+            if (!k || FIREBASE_ILLEGAL.test(k)) continue;
+            out[k] = cleanForFirebase(val);
+        }
+        return out;
+    }
+    if (typeof v === 'number' && !isFinite(v)) return 0;
+    return v;
+}
+
+// ===== 累積型題目（數字 / 動物 / 姓氏 / 顏色 / 植物）=====
+// 比對用正規化：去空白、英文轉小寫、全形數字英數轉半形
+function normCollect(v) {
+    return (v == null ? "" : String(v))
+        .replace(/[\uFF01-\uFF5E]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+        .replace(/\s+/g, "")
+        .trim()
+        .toLowerCase();
+}
+function getCollectStep(ck) {
+    return (COLLECT_META[ck] && COLLECT_META[ck].step) || 3;
+}
+function getCollectList(ck) {
+    if (!collectLog || !Array.isArray(collectLog[ck])) return [];
+    return collectLog[ck];
+}
+function collectHasValue(ck, val) {
+    const n = normCollect(val);
+    if (!n) return false;
+    return getCollectList(ck).some(x => normCollect(x) === n);
+}
+// 回傳這次輸入可獲得的卡片數
+function calcCollectReward(ck, val) {
+    const step = getCollectStep(ck);
+    if (!normCollect(val)) return 1;
+    if (collectHasValue(ck, val)) return 1;          // 用過的答案：固定 1 張
+    const total = getCollectList(ck).length + 1;      // 加上這次的新答案
+    return 1 + Math.floor(total / step);
+}
+
 const firebaseConfig = { apiKey: "AIzaSyBjYdhxIQ_LGoNHiAkygjkIqWsb8NgF0s8", authDomain: "ktv-game.firebaseapp.com", databaseURL: "https://ktv-game-default-rtdb.asia-southeast1.firebasedatabase.app", projectId: "ktv-game", storageBucket: "ktv-game.firebasestorage.app", messagingSenderId: "903538372328", appId: "1:903538372328:web:2456e55fcd41f0899f635d" };
 // ⚠️ 安全提醒：web config 放前端是正常的，真正的防線是 Realtime Database「規則」。
 // 本版已搭配「匿名登入」，請務必到 Firebase 主控台把規則改成需要 auth != null
@@ -698,109 +847,291 @@ function initGame() {
         return playerRef.once('value').then(snap => {
             const data = snap.val() || {};
 
-            if (data.collection || data.singers || data.singerHistory) {
-                collection = data.collection || {};
-                singers = data.singers || { m: [], f: [], g: [] };
-                singerHistory = data.singerHistory || { m: [], f: [], g: [] };
+            // 讀本機備份（只是後援；手機上可能完全沒有，一切以雲端為準）
+            const readLocal = (part, fallback) => {
+                const v = lsRead(part);
+                return (v === null || v === undefined) ? fallback : v;
+            };
+
+            if (data.collection || data.singers || data.singerHistory || data.collectLog) {
+                collection    = normalizeCollection(data.collection);
+                singers       = normalizeSingerMap(data.singers);
+                singerHistory = normalizeSingerMap(data.singerHistory);
+                collectLog    = normalizeCollectLog(data.collectLog);
             } else {
-                collection = JSON.parse(localStorage.getItem(`v70_col_${myName}`)) || {};
-                singers = JSON.parse(localStorage.getItem(`v70_sin_${myName}`)) || { m: [], f: [], g: [] };
-                singerHistory = JSON.parse(localStorage.getItem(`v70_his_${myName}`)) || { m: [], f: [], g: [] };
+                collection    = normalizeCollection(readLocal('col', {}));
+                singers       = normalizeSingerMap(readLocal('sin', null));
+                singerHistory = normalizeSingerMap(readLocal('his', null));
+                collectLog    = normalizeCollectLog(readLocal('clog', null));
             }
 
+            // 雲端有玩家資料但沒有 collectLog 時，仍嘗試從本機接回（累積紀錄不遺失）
+            if (COLLECT_KEYS.every(k => getCollectList(k).length === 0)) {
+                const localLog = normalizeCollectLog(readLocal('clog', null));
+                if (COLLECT_KEYS.some(k => localLog[k].length > 0)) collectLog = localLog;
+            }
+
+            // 歷史歌手清單也要包含目前擁有的歌手（舊資料修補，不會刪任何東西）
             ['m', 'f', 'g'].forEach(t => {
-                if (!singerHistory[t]) singerHistory[t] = [];
-                if (!singers[t]) singers[t] = [];
+                singers[t].forEach(n => {
+                    if (!singerHistory[t].includes(n)) singerHistory[t].push(n);
+                });
             });
 
             // 還原「保留中的題目」：優先讀雲端，其次讀本機（不影響任何既有資料）
             let savedTask = data.currentTask || null;
-            if (!savedTask) {
-                try { savedTask = JSON.parse(localStorage.getItem(`v70_task_${myName}`)); } catch (e) { savedTask = null; }
-            }
-            currentTask = (savedTask && savedTask.t) ? savedTask : null;
+            if (!savedTask) savedTask = readLocal('task', null);
+            currentTask = (savedTask && savedTask.t) ? migrateTask(savedTask) : null;
 
-            document.getElementById('display-name').innerText = myName;
-            document.getElementById('display-room').innerText = myRoom;
+            document.getElementById('display-name').textContent = myName;
+            document.getElementById('display-room').textContent = myRoom;
             document.getElementById('ui-header').style.display = 'flex';
+
+            // 讀取成功後才解鎖寫入，之後的每次變更都會寫回雲端
+            cloudLoaded = true;
 
             // 避免重複綁定 ranking 監聽器
             if (rankingRef) rankingRef.off();
             rankingRef = db.ref(`rooms/${myRoom}/players`);
             rankingRef.on('value', s => updateRanking(s.val()));
 
-            renderCollection();
-            updateResumeBtn();
+            watchConnection();
+
+            // 一律走 syncData：畫面 → 本機 → 雲端，確保三邊一致
             showPage('page-home');
-            // 初始寫入交給 syncData 一次處理
             syncData();
+            clearLegacyLocal();   // 舊版備份已搬進「房號+暱稱」的新 key，移除避免跨房汙染
         });
     }).catch(e => {
         // 匿名登入失敗或讀取房間資料失敗都會進來這裡
         console.error("連線/登入失敗:", e);
-        alert("連線失敗，請檢查網路後重試（若持續失敗，請確認 Firebase 已啟用『匿名』登入方式）");
+        // 重要：讀取失敗時把身分清空並保持鎖定，確保不會有任何寫入蓋掉雲端上的舊紀錄
+        cloudLoaded = false;
+        myName = ""; myRoom = "";
+        alert("連線失敗，紀錄沒有被更動。請檢查網路後再按一次「開始挑戰」。\n（若持續失敗，請確認 Firebase 已啟用『匿名』登入方式）");
     });
 }
 
+// 監看 Firebase 連線狀態：斷線會提示，重新連上會自動把未同步的變更補送
+let connRef = null;
+function watchConnection() {
+    if (connRef) return;
+    try {
+        connRef = db.ref('.info/connected');
+        connRef.on('value', snap => {
+            isOnline = !!snap.val();
+            if (isOnline) {
+                if (pendingSync) pushCloud();
+                else setSyncStatus('ok');
+            } else {
+                setSyncStatus('offline');
+            }
+        });
+    } catch (e) { console.warn("無法監看連線狀態:", e); }
+}
+
+// 手機切到背景／關掉分頁前，再補送一次，降低來不及寫入的機會
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && pendingSync) { saveLocal(); pushCloud(); }
+});
+window.addEventListener('beforeunload', () => {
+    if (pendingSync) { saveLocal(); pushCloud(); }
+});
+
+// syncData 拆成三段：畫面更新 → 本機備份 → 雲端同步
+// 這樣就算雲端寫入失敗（規則、網路、資料異常），畫面與蒐集冊也一定是正確的
 function syncData() {
+    refreshUI();
+    saveLocal();
+    pushCloud();
+}
+
+// ===== 畫面更新（完全只依賴本機狀態，不受 Firebase 影響）=====
+function refreshUI() {
     const comp = getCompletedGroupCount();
     const uniqueCount = getUniqueSingerCount();
-    document.getElementById('total-groups-completed').innerText = `${comp} 👑`;
-    document.getElementById('unique-singer-count').innerText = `${uniqueCount} 位不重複`;
+    const uniqCards = countUniqueOwned(collection);
+    const dupeCards = countDupes(collection);
+    const totalCards = uniqCards + dupeCards;
+    const totalMembers = getTotalMemberCount();
+
+    const compEl = document.getElementById('total-groups-completed');
+    if (compEl) compEl.textContent = `${comp} 👑`;
+
+    const headEl = document.getElementById('header-card-count');
+    if (headEl) headEl.textContent = `${totalCards} 張（不重複 ${uniqCards}）`;
+
+    const singerEl = document.getElementById('unique-singer-count');
+    if (singerEl) singerEl.textContent = `${uniqueCount} 位不重複`;
+
+    const statEl = document.getElementById('home-card-stat');
+    if (statEl) {
+        const pct = totalMembers ? Math.round(uniqCards / totalMembers * 1000) / 10 : 0;
+        statEl.innerHTML = "";
+        const l1 = document.createElement('div');
+        l1.innerHTML = `不重複卡片：<b style="color:var(--highlight);">${uniqCards}</b> / ${totalMembers} 張（${pct}%）`;
+        const l2 = document.createElement('div');
+        l2.innerHTML = `重複卡片：<b style="color:var(--gold);">${dupeCards}</b> 張　總持有：<b>${totalCards}</b> 張`;
+        const l3 = document.createElement('div');
+        l3.innerHTML = `集滿團體：<b style="color:var(--gold);">${comp}</b> 團 👑`;
+        statEl.append(l1, l2, l3);
+    }
 
     const exBtn = document.getElementById('btn-singer-exchange');
     if(exBtn) exBtn.style.display = uniqueCount >= 10 ? 'block' : 'none';
 
-    const totalDupes = getTotalDupes();
     const dupesBtn = document.getElementById('btn-global-exchange');
     if (dupesBtn) {
-        if (totalDupes >= 5) {
+        if (dupeCards >= 5) {
             dupesBtn.style.display = 'block';
-            dupesBtn.innerHTML = `♻️ 消耗 5 張任意重複卡片 (目前 ${totalDupes} 張)<br>兌換 1 張【保證未擁有】卡片`;
+            dupesBtn.innerHTML = `♻️ 消耗 5 張任意重複卡片 (目前 ${dupeCards} 張)<br>兌換 1 張【保證未擁有】卡片`;
         } else {
             dupesBtn.style.display = 'none';
         }
     }
 
     renderHomeSingers();
-
     updateResumeBtn();
+    renderRanking();   // 讓自己的名字與張數立刻出現，不必等雲端回傳
+    renderCollection();
+}
 
-    if (myName && myRoom) {
-        db.ref(`rooms/${myRoom}/players/${myName}`).update({
+// ===== 本機備份 key =====
+// 新版用「房號 + 暱稱」分開存，避免不同房間的紀錄互相汙染；
+// 同時保留舊版只有暱稱的 key，讓 V72 以前的存檔還讀得到（紀錄可延續）。
+function lsKeyNew(part) { return `v73_${part}_${myRoom}_${myName}`; }
+function lsKeyOld(part) { return `v70_${part}_${myName}`; }
+
+function lsRead(part) {
+    if (!myName) return null;
+    for (const k of [lsKeyNew(part), lsKeyOld(part)]) {
+        try {
+            const raw = localStorage.getItem(k);
+            if (raw === null) continue;
+            const v = JSON.parse(raw);
+            if (v !== null && v !== undefined) return v;
+        } catch (e) { /* 手機隱私模式可能整個不能用，忽略 */ }
+    }
+    return null;
+}
+function lsWrite(part, value) {
+    if (!myName) return;
+    // 只寫「房號 + 暱稱」的新 key。舊 key 只讀不寫，並在成功載入後清掉，
+    // 避免 A 房的備份在進 B 房時被誤當成 B 房的紀錄。
+    try { localStorage.setItem(lsKeyNew(part), JSON.stringify(value)); } catch (e) {}
+}
+// 舊版 key 只當一次性搬家用：搬完就移除
+function clearLegacyLocal() {
+    if (!myName) return;
+    ['col', 'sin', 'his', 'clog', 'task'].forEach(part => {
+        try { localStorage.removeItem(lsKeyOld(part)); } catch (e) {}
+    });
+}
+function lsRemove(part) {
+    if (!myName) return;
+    try { localStorage.removeItem(lsKeyNew(part)); } catch (e) {}
+    try { localStorage.removeItem(lsKeyOld(part)); } catch (e) {}
+}
+
+function saveLocal() {
+    if (!myName) return;
+    lsWrite('col', collection);
+    lsWrite('sin', singers);
+    lsWrite('his', singerHistory);
+    lsWrite('clog', collectLog);
+}
+
+function pushCloud() {
+    if (!myName || !myRoom) return;
+    // 關鍵保護：還沒成功讀完雲端資料前，一律不寫入
+    // （否則網路慢／讀取失敗時，會用空白的 collection 蓋掉雲端上的舊紀錄）
+    if (!cloudLoaded) return;
+
+    let payload;
+    try {
+        payload = cleanForFirebase({
             name: myName,
-            completedGroups: comp,
-            cardCount: Object.values(collection).reduce((a, b) => a + b, 0), // 總張數（含重複，保留給舊版相容）
+            completedGroups: getCompletedGroupCount(),
+            cardCount: countUniqueOwned(collection) + countDupes(collection), // 總張數（含重複，舊版相容）
             uniqueCards: countUniqueOwned(collection),                        // 不重複張數（排行榜顯示用）
             dupeCards: countDupes(collection),                                // 重複張數
             collection: collection,
             singers: singers,
             singerHistory: singerHistory,
+            collectLog: collectLog,
             lastActive: Date.now()
-        }).catch(e => console.error("Firebase 同步失敗:", e));
+        });
+    } catch (e) {
+        console.error("組裝同步資料失敗:", e);
+        pendingSync = true;
+        setSyncStatus('fail');
+        return;
     }
 
-    localStorage.setItem(`v70_col_${myName}`, JSON.stringify(collection));
-    localStorage.setItem(`v70_sin_${myName}`, JSON.stringify(singers));
-    localStorage.setItem(`v70_his_${myName}`, JSON.stringify(singerHistory));
+    pendingSync = true;
+    setSyncStatus('saving');
 
-    renderCollection();
+    try {
+        db.ref(`rooms/${myRoom}/players/${myName}`).update(payload)
+          .then(() => {
+              pendingSync = false;
+              setSyncStatus('ok');
+          })
+          .catch(e => {
+              console.error("Firebase 同步失敗:", e);
+              setSyncStatus('fail');
+              scheduleRetry();
+          });
+    } catch (e) {
+        console.error("Firebase 同步發生例外:", e);
+        setSyncStatus('fail');
+        scheduleRetry();
+    }
+}
+
+// 失敗後每 8 秒自動重試，直到成功
+function scheduleRetry() {
+    if (syncTimer) return;
+    syncTimer = setInterval(() => {
+        if (!pendingSync) { clearInterval(syncTimer); syncTimer = null; return; }
+        pushCloud();
+    }, 8000);
+}
+
+// 手動立即備份（點標題列的同步狀態或主畫面按鈕）
+function forceSync() {
+    if (!myName || !myRoom) return;
+    if (!cloudLoaded) { showToast("還沒讀取到雲端資料，請稍候或重新登入"); return; }
+    saveLocal();
+    pushCloud();
+    showToast("正在備份到雲端…");
+}
+
+function setSyncStatus(state) {
+    const el = document.getElementById('sync-status');
+    if (!el) return;
+    if (!isOnline) { el.textContent = "📴 離線中，紀錄尚未上傳"; el.style.color = "#ff9800"; return; }
+    if (state === 'saving')      { el.textContent = "⏳ 同步中…";              el.style.color = "#888"; }
+    else if (state === 'ok')     { el.textContent = "☁️ 已備份到雲端";         el.style.color = "var(--group)"; }
+    else if (state === 'fail')   { el.textContent = "⚠️ 同步失敗，點此重試";   el.style.color = "#ff5252"; }
+    else                          { el.textContent = "☁️ 檢查中…";             el.style.color = "#888"; }
 }
 
 function renderHomeSingers() {
     const list = document.getElementById('home-singer-list');
+    if(!list) return;
     list.innerHTML = "";
-    const counts = {};
+    // 用 Map 避免歌手名稱剛好是 __proto__ / toString 等特殊字造成統計錯誤
+    const counts = new Map();
 
     ['m', 'f', 'g'].forEach(type => {
-        (singers[type] || []).forEach(name => {
-            if(!counts[name]) counts[name] = { type: type, count: 0 };
-            counts[name].count++;
+        (Array.isArray(singers[type]) ? singers[type] : []).forEach(name => {
+            if(!counts.has(name)) counts.set(name, { type: type, count: 0 });
+            counts.get(name).count++;
         });
     });
 
-    for(let name in counts) {
-        const item = counts[name];
+    for(const [name, item] of counts) {
         // 用 textContent，避免歌手名稱含 HTML 造成注入
         const span = document.createElement('span');
         span.className = `tag-display ${item.type}`;
@@ -815,6 +1146,32 @@ function getUniqueSingerCount() {
 }
 
 // ==================== 任務流程 ====================
+// 舊版保留中的題目（例如 V72 的 type:"num"）轉成新格式，避免結算時卡住
+function migrateTask(task) {
+    if (!task) return null;
+    const out = {
+        t: task.t,
+        n: Number(task.n) || 1,
+        type: task.type || null,
+        extra: task.extra || "",
+        st: task.st || null,
+        ck: task.ck || null
+    };
+    if (out.type === "num" || out.t === "歌名要有數字：") {
+        out.t = "歌名要有【數字】";
+        out.type = "collect";
+        out.ck = "num";
+        out.n = 1;
+        out.extra = "";
+    }
+    if (out.type === "collect" && !COLLECT_META[out.ck]) {
+        // 找不到對應設定就退回單純題目，不讓玩家卡死
+        out.type = null;
+        out.ck = null;
+    }
+    return out;
+}
+
 function startTask(force) {
     // 已有保留中的題目時，先確認避免誤觸洗掉題目
     if(currentTask && !force) {
@@ -826,16 +1183,22 @@ function startTask(force) {
     
     if(t.type === "zy") {
         extra = VALID_ZHUYIN[Math.floor(Math.random() * VALID_ZHUYIN.length)];
-    } else if(t.type === "num") {
-        extra = NUM_OPTIONS[Math.floor(Math.random() * NUM_OPTIONS.length)];
     } else if(t.type === "lyric") {
         const songObj = LYRICS_DB[Math.floor(Math.random() * LYRICS_DB.length)];
         const randomLine = songObj.lines[Math.floor(Math.random() * songObj.lines.length)];
         extra = `\n"${randomLine}"`;
     }
+    // collect 型不再給隨機答案，由挑戰者自己選擇
 
     // 明確組出乾淨物件，避免 undefined 欄位讓 Firebase 寫入失敗
-    currentTask = { t: t.t, n: t.n, type: t.type || null, extra: extra };
+    currentTask = {
+        t: t.t,
+        n: t.n,
+        type: t.type || null,
+        extra: extra,
+        st: t.st || null,
+        ck: t.ck || null
+    };
     persistTask();
     renderTaskPage();
     showPage('page-challenge');
@@ -844,9 +1207,54 @@ function startTask(force) {
 // 依 currentTask 把挑戰頁畫出來（重新整理後也能還原）
 function renderTaskPage() {
     if(!currentTask) return;
-    document.getElementById('task-desc').innerText = currentTask.t;
-    document.getElementById('task-extra').innerText = currentTask.extra || "";
-    document.getElementById('task-reward').innerText = `獎勵：${currentTask.n} 張卡片`;
+    document.getElementById('task-desc').textContent = currentTask.t;
+    document.getElementById('task-extra').textContent = currentTask.extra || "";
+
+    const info = document.getElementById('task-collect-info');
+    if(currentTask.type === "collect" && COLLECT_META[currentTask.ck]) {
+        const ck = currentTask.ck;
+        const meta = COLLECT_META[ck];
+        const used = getCollectList(ck);
+        const step = meta.step;
+        const nextReward = 1 + Math.floor((used.length + 1) / step);
+
+        document.getElementById('task-reward').textContent =
+            `獎勵：基礎 1 張（用過的答案固定 1 張）／新答案最多 ${nextReward} 張`;
+
+        info.style.display = 'block';
+        info.innerHTML = "";
+
+        const rule = document.createElement('div');
+        rule.style.cssText = "color:#ccc; line-height:1.7;";
+        rule.textContent = `規則：由你自己決定要用哪一個${meta.label}。累積不同的${meta.label}每 ${step} 個，就多給 1 張卡片；如果用的是以前用過的${meta.label}，這次只給 1 張。`;
+        info.appendChild(rule);
+
+        const title = document.createElement('div');
+        title.style.cssText = "margin-top:8px; color:var(--gold); font-weight:bold;";
+        title.textContent = `已使用過的${meta.label}（${used.length} 個）`;
+        info.appendChild(title);
+
+        const wrap = document.createElement('div');
+        wrap.className = "collect-used";
+        if(used.length === 0) {
+            const empty = document.createElement('span');
+            empty.style.cssText = "font-size:12px; color:#666;";
+            empty.textContent = `還沒有使用過任何${meta.label}，這次不管用哪個都算新的`;
+            wrap.appendChild(empty);
+        } else {
+            used.forEach(v => {
+                const tag = document.createElement('span');
+                tag.className = "used-tag";
+                tag.textContent = v;
+                wrap.appendChild(tag);
+            });
+        }
+        info.appendChild(wrap);
+    } else {
+        document.getElementById('task-reward').textContent = `獎勵：${currentTask.n} 張卡片`;
+        info.style.display = 'none';
+        info.innerHTML = "";
+    }
 }
 
 // 保留題目、單純回主畫面
@@ -885,14 +1293,16 @@ function updateResumeBtn() {
 function persistTask() {
     if(myName) {
         try {
-            if(currentTask) localStorage.setItem(`v70_task_${myName}`, JSON.stringify(currentTask));
-            else localStorage.removeItem(`v70_task_${myName}`);
+            if(currentTask) lsWrite('task', currentTask);
+            else lsRemove('task');
         } catch(e) { console.warn("本機儲存題目失敗:", e); }
     }
-    if(myName && myRoom) {
-        db.ref(`rooms/${myRoom}/players/${myName}`)
-          .update({ currentTask: currentTask || null })
-          .catch(e => console.error("題目同步失敗:", e));
+    if(myName && myRoom && cloudLoaded) {
+        try {
+            db.ref(`rooms/${myRoom}/players/${myName}`)
+              .update({ currentTask: currentTask ? cleanForFirebase(currentTask) : null })
+              .catch(e => console.error("題目同步失敗:", e));
+        } catch(e) { console.error("題目同步例外（本機仍已保存）:", e); }
     }
     updateResumeBtn();
 }
@@ -969,9 +1379,104 @@ function globalExchange() {
 
 function goToSettlement() {
     if(!currentTask) return alert("目前沒有進行中的題目，請先抽取挑戰任務");
+    renderCollectBox();
     document.getElementById('singer-input-container').innerHTML = "";
     addSingerInputRow();
     showPage('page-settle');
+}
+
+// ===== 結算頁：累積型題目的答案輸入區 =====
+function renderCollectBox() {
+    const box = document.getElementById('collect-box');
+    if(!box) return;
+    box.innerHTML = "";
+
+    if(!currentTask || currentTask.type !== "collect" || !COLLECT_META[currentTask.ck]) {
+        box.style.display = 'none';
+        return;
+    }
+
+    const ck = currentTask.ck;
+    const meta = COLLECT_META[ck];
+    const used = getCollectList(ck);
+
+    box.style.display = 'block';
+    box.className = "collect-box";
+
+    const title = document.createElement('div');
+    title.className = "collect-title";
+    title.textContent = `請輸入這次歌名裡用的【${meta.label}】`;
+    box.appendChild(title);
+
+    const input = document.createElement('input');
+    input.type = "text";
+    input.className = "input-field";
+    input.id = "collect-input";
+    input.placeholder = meta.ph;
+    box.appendChild(input);
+
+    const hint = document.createElement('div');
+    hint.className = "collect-hint";
+    hint.textContent = `累積不同的${meta.label}每 ${meta.step} 個 → 多給 1 張卡片；輸入以前用過的${meta.label} → 固定只給 1 張。目前已累積 ${used.length} 個。`;
+    box.appendChild(hint);
+
+    const usedTitle = document.createElement('div');
+    usedTitle.style.cssText = "font-size:12px; color:var(--gold); font-weight:bold;";
+    usedTitle.textContent = `曾經用過的${meta.label}（點一下可直接填入）`;
+    box.appendChild(usedTitle);
+
+    const wrap = document.createElement('div');
+    wrap.className = "collect-used";
+    if(used.length === 0) {
+        const empty = document.createElement('span');
+        empty.style.cssText = "font-size:12px; color:#666;";
+        empty.textContent = `尚無紀錄`;
+        wrap.appendChild(empty);
+    } else {
+        used.forEach(v => {
+            const tag = document.createElement('span');
+            tag.className = "used-tag";
+            tag.textContent = v;
+            tag.onclick = () => { input.value = v; updateCollectPreview(); };
+            wrap.appendChild(tag);
+        });
+    }
+    box.appendChild(wrap);
+
+    const preview = document.createElement('div');
+    preview.className = "collect-preview";
+    preview.id = "collect-preview";
+    box.appendChild(preview);
+
+    input.oninput = updateCollectPreview;
+    updateCollectPreview();
+}
+
+function updateCollectPreview() {
+    const preview = document.getElementById('collect-preview');
+    const input = document.getElementById('collect-input');
+    if(!preview || !input || !currentTask || currentTask.type !== "collect") return;
+
+    const ck = currentTask.ck;
+    const meta = COLLECT_META[ck];
+    const val = input.value;
+
+    if(!normCollect(val)) {
+        preview.style.color = "#888";
+        preview.textContent = `尚未輸入${meta.label}`;
+        return;
+    }
+    const reward = calcCollectReward(ck, val);
+    if(collectHasValue(ck, val)) {
+        preview.style.color = "var(--gold)";
+        preview.textContent = `♻️ 這個${meta.label}用過了 → 獲得 1 張卡片`;
+    } else {
+        const total = getCollectList(ck).length + 1;
+        const need = meta.step - (total % meta.step);
+        preview.style.color = "var(--highlight)";
+        preview.textContent = `✨ 新的${meta.label}！累積將達 ${total} 個 → 獲得 ${reward} 張卡片` +
+            (need === meta.step ? "（剛好達成新的一階！）" : `（再 ${need} 個不同的${meta.label}可再多 1 張）`);
+    }
 }
 
 // ==================== 歌手登錄結算 ====================
@@ -979,16 +1484,19 @@ function addSingerInputRow() {
     const container = document.getElementById('singer-input-container');
     const rowId = Date.now() + Math.random().toString(36).slice(2, 7);
     
+    // 依題目自動選好歌手類型（唱女歌手→女、唱男歌手→男、唱團體→團體）
+    const defType = (currentTask && ['m','f','g'].includes(currentTask.st)) ? currentTask.st : 'm';
+
     const div = document.createElement('div');
     div.className = "singer-input-row";
     div.id = `row-${rowId}`;
-    div.dataset.type = "m";
+    div.dataset.type = defType;
     
     div.innerHTML = `
         <div class="type-select">
-            <div id="btn-m-${rowId}" class="type-opt m active" onclick="setRowType('${rowId}', 'm')">男</div>
-            <div id="btn-f-${rowId}" class="type-opt f" onclick="setRowType('${rowId}', 'f')">女</div>
-            <div id="btn-g-${rowId}" class="type-opt g" onclick="setRowType('${rowId}', 'g')">團體</div>
+            <div id="btn-m-${rowId}" class="type-opt m${defType==='m'?' active':''}" onclick="setRowType('${rowId}', 'm')">男</div>
+            <div id="btn-f-${rowId}" class="type-opt f${defType==='f'?' active':''}" onclick="setRowType('${rowId}', 'f')">女</div>
+            <div id="btn-g-${rowId}" class="type-opt g${defType==='g'?' active':''}" onclick="setRowType('${rowId}', 'g')">團體</div>
         </div>
         <input type="text" class="input-field" placeholder="輸入歌手名稱..." id="input-${rowId}">
         <div class="tag-tool-row">
@@ -1040,7 +1548,7 @@ window.renderAllHistoryTags = function(rowId, keyword) {
     shown.forEach(tag => {
         const span = document.createElement('span');
         span.className = `quick-tag t-${tag.type}`;
-        span.innerText = tag.name;
+        span.textContent = tag.name;
         span.onclick = () => {
             const inp = document.getElementById(`input-${rowId}`);
             if(inp) inp.value = tag.name;
@@ -1071,25 +1579,53 @@ function finalizeSettlement() {
         // 只取這一列的歌手名稱輸入框（避免抓到搜尋框）
         const input = row.querySelector('.input-field:not(.tag-filter)');
         const name = input ? input.value.trim() : "";
-        const type = row.dataset.type || 'm';
+        const type = ['m','f','g'].includes(row.dataset.type) ? row.dataset.type : 'm';
         if(name) pending.push({ name, type });
     });
 
     if(pending.length === 0) return alert("請至少輸入一位歌手");
 
+    // ===== 累積型題目：先算好獎勵，確認資料無誤才寫入 =====
+    let reward = Number(currentTask.n) || 1;
+    let collectCommit = null;
+
+    if(currentTask.type === "collect" && COLLECT_META[currentTask.ck]) {
+        const ck = currentTask.ck;
+        const meta = COLLECT_META[ck];
+        const el = document.getElementById('collect-input');
+        const raw = el ? el.value.trim() : "";
+        if(!normCollect(raw)) return alert(`請輸入這次歌名裡用的【${meta.label}】`);
+
+        reward = calcCollectReward(ck, raw);
+        const isNew = !collectHasValue(ck, raw);
+        collectCommit = { ck: ck, val: raw, isNew: isNew, label: meta.label };
+    }
+
     // 確認無誤後才寫入，避免中途 return 造成資料不一致
     pending.forEach(({ name, type }) => {
-        if(!singers[type]) singers[type] = [];
-        if(!singerHistory[type]) singerHistory[type] = [];
+        if(!Array.isArray(singers[type])) singers[type] = [];
+        if(!Array.isArray(singerHistory[type])) singerHistory[type] = [];
         singers[type].push(name);
         if(!singerHistory[type].includes(name)) singerHistory[type].push(name);
     });
 
-    const reward = currentTask.n || 1;
+    if(collectCommit && collectCommit.isNew) {
+        if(!Array.isArray(collectLog[collectCommit.ck])) collectLog[collectCommit.ck] = [];
+        collectLog[collectCommit.ck].push(collectCommit.val);
+    }
+
     currentTask = null;   // 已完成，題目結束
     persistTask();
+    // 先更新畫面與紀錄，再顯示抽卡結果，確保「主畫面張數」一定同步
     drawCards(reward);
     syncData();
+
+    if(collectCommit) {
+        const list = getCollectList(collectCommit.ck);
+        showToast(collectCommit.isNew
+            ? `新的${collectCommit.label}「${collectCommit.val}」！已累積 ${list.length} 個，獲得 ${reward} 張`
+            : `${collectCommit.label}「${collectCommit.val}」用過了，獲得 1 張`);
+    }
 }
 
 // ==================== 圖片與抽卡處理 ====================
@@ -1104,7 +1640,8 @@ function getCardImage(group, member) {
 
 window.handleImgError = function(img, member) {
     img.onerror = null; 
-    img.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='400' style='background:%23222;'><text x='50%25' y='50%25' font-size='24' fill='%23ff4081' dominant-baseline='middle' text-anchor='middle'>" + member + "</text></svg>";
+    const safe = encodeURIComponent(String(member || "?")).replace(/'/g, "%27");
+    img.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='400' style='background:%23222;'><text x='50%25' y='50%25' font-size='24' fill='%23ff4081' dominant-baseline='middle' text-anchor='middle'>" + safe + "</text></svg>";
 };
 
 function renderDrawResult(cards) {
@@ -1302,39 +1839,84 @@ function openCardView(group, member) {
         imgEl.onerror = function() { handleImgError(this, member); };
     }
     
-    document.getElementById('view-name').innerText = member;
-    document.getElementById('view-group').innerText = group;
+    document.getElementById('view-name').textContent = member;
+    document.getElementById('view-group').textContent = group;
     document.getElementById('card-view-modal').style.display = 'flex';
 }
 
 function closeCardView() { document.getElementById('card-view-modal').style.display = 'none'; }
 
 function updateRanking(data) {
+    lastRankingData = data || {};
+    renderRanking();
+}
+
+// 把「雲端資料」與「自己的本機即時狀態」合併後顯示
+// 這樣一進新房間或剛抽到卡，自己的名字與張數就會立刻出現
+function renderRanking() {
     const list = document.getElementById('ranking-list');
+    if (!list) return;
     list.innerHTML = "";
+
+    const merged = {};
+    const src = lastRankingData || {};
+    for (const k in src) {
+        if (!Object.prototype.hasOwnProperty.call(src, k)) continue;
+        const v = src[k];
+        if (v && typeof v === 'object') merged[k] = Object.assign({}, v, { name: v.name || k });
+    }
+
+    if (myName) {
+        merged[myName] = Object.assign({}, merged[myName] || {}, {
+            name: myName,
+            completedGroups: getCompletedGroupCount(),
+            collection: collection,
+            uniqueCards: countUniqueOwned(collection),
+            dupeCards: countDupes(collection),
+            isMe: true
+        });
+    }
+
     // 只計算「不重複」張數：優先由 collection 精算，沒有才退回同步欄位
     const uniqOf = (p) => {
         if (p && p.collection) return countUniqueOwned(p.collection);
         if (p && typeof p.uniqueCards === 'number') return p.uniqueCards;
         return 0;
     };
+    const dupeOf = (p) => {
+        if (p && p.collection) return countDupes(p.collection);
+        if (p && typeof p.dupeCards === 'number') return p.dupeCards;
+        return 0;
+    };
 
-    Object.values(data || {})
+    const rows = Object.keys(merged).map(k => merged[k]);
+    if (rows.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.cssText = "font-size:12px; color:#888;";
+        empty.textContent = "目前房間內沒有玩家資料";
+        list.appendChild(empty);
+        return;
+    }
+
+    rows
         // 先比 👑，平手再比不重複張數
         .sort((a, b) => (b.completedGroups || 0) - (a.completedGroups || 0)
                      || uniqOf(b) - uniqOf(a))
         .forEach((p, i) => {
             const comp = p.completedGroups || 0;
             const cards = uniqOf(p);
+            const dupes = dupeOf(p);
 
             const row = document.createElement('div');
-            row.style.cssText = "display:flex; justify-content:space-between; margin-bottom:5px;";
+            row.style.cssText = "display:flex; justify-content:space-between; margin-bottom:5px; gap:8px;";
+            if (p.isMe) row.style.color = "var(--highlight)";
 
             // textContent 防止暱稱注入
             const left = document.createElement('span');
-            left.textContent = `${i + 1}. ${p.name || '???'}`;
+            left.textContent = `${i + 1}. ${p.name || '???'}${p.isMe ? '（我）' : ''}`;
             const right = document.createElement('span');
-            right.textContent = `${comp} 👑 / ${cards}張（不重複）`;
+            right.style.whiteSpace = "nowrap";
+            right.textContent = `${comp} 👑 / ${cards} 張（重複 ${dupes}）`;
 
             row.append(left, right);
             list.appendChild(row);
@@ -1343,19 +1925,26 @@ function updateRanking(data) {
 
 function showToast(msg) {
     const t = document.getElementById('toast');
-    t.innerText = msg;
+    t.textContent = msg;
     t.style.display = 'block';
     setTimeout(() => t.style.display = 'none', 2000);
 }
 
 function showPage(id) { 
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); 
-    document.getElementById(id).classList.add('active'); 
+    const el = document.getElementById(id);
+    if(el) el.classList.add('active'); 
     window.scrollTo(0,0);
-    if(id === 'page-book') renderCollection(); 
+    // 進入蒐集冊或主畫面時一律重畫，保證兩邊的張數永遠一致
+    if(id === 'page-book') renderCollection();
+    if(id === 'page-home' && myName) refreshUI();
 }
 
-function closeDrawModal() { document.getElementById('draw-modal').style.display = 'none'; showPage('page-home'); }
+function closeDrawModal() {
+    document.getElementById('draw-modal').style.display = 'none';
+    refreshUI();          // 收進口袋後主畫面統計立刻更新
+    showPage('page-home');
+}
 </script>
 </body>
 </html>

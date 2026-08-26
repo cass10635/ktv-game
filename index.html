@@ -281,7 +281,7 @@
     <div class="player-info">
         <div id="display-name" style="color:var(--highlight); font-weight:bold;"></div>
         <div style="font-size:10px; color:#888;">ROOM: <span id="display-room"></span></div>
-        <div id="sync-status" style="font-size:10px; margin-top:2px; cursor:pointer;" onclick="forceSync()">☁️ 檢查中…</div>
+        <div id="sync-status" style="font-size:10px; margin-top:2px; cursor:pointer;" onclick="openDiagnostics()">☁️ 檢查中…</div>
     </div>
     <div style="text-align: right;">
         <div class="score-display" id="total-groups-completed">0 👑</div>
@@ -298,6 +298,8 @@
 </div>
 
 <div id="page-home" class="page">
+    <div id="unsaved-warn" style="display:none; background:#3a1414; border:1px solid #ff5252; color:#ff8a80; border-radius:10px; padding:12px; margin-bottom:15px; font-size:13px; text-align:left; line-height:1.7;"></div>
+
     <div class="home-singer-section">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <strong>🎤 已蒐集歌手名冊</strong>
@@ -374,6 +376,16 @@
         <h2 style="color:var(--gold);">✨ 獲得成員卡片！</h2>
         <div id="draw-results" style="display:flex; flex-wrap:wrap; justify-content:center;"></div>
         <button class="btn-main" style="margin-top:20px; width:200px;" onclick="closeDrawModal()">收進口袋</button>
+    </div>
+</div>
+
+<div id="diag-modal" style="position:fixed; inset:0; background:rgba(0,0,0,0.96); display:none; z-index:900; overflow-y:auto; padding:20px; box-sizing:border-box;">
+    <div style="max-width:540px; margin:0 auto; text-align:left;">
+        <h3 style="color:var(--accent); margin-top:0;">☁️ 雲端同步診斷</h3>
+        <div id="diag-out" style="font-size:12px; white-space:pre-wrap; word-break:break-word; background:#111; border:1px solid #333; border-radius:8px; padding:12px; line-height:1.8; font-family:monospace;"></div>
+        <button class="btn-sec" style="margin-top:12px;" onclick="runDiagnostics()">🔄 重新檢測</button>
+        <button class="btn-sec" onclick="copyDiagnostics()">📋 複製檢測結果</button>
+        <button class="btn-main" onclick="document.getElementById('diag-modal').style.display='none'">關閉</button>
     </div>
 </div>
 
@@ -655,6 +667,8 @@ let cloudLoaded = false;   // 是否已成功讀完雲端資料。false 時「�
 let pendingSync = false;   // 有變更還沒成功寫上雲端
 let isOnline = true;       // Firebase 連線狀態
 let syncTimer = null;      // 失敗後的自動重試計時器
+let dataRev = 0;           // 存檔版本號：每次存檔 +1，用來判斷雲端／本機哪一份比較新
+let lastSyncError = null;  // 最近一次同步錯誤（顯示在診斷畫面）
 
 // Firebase key 不允許 . # $ [ ] / 與控制字元，統一由此過濾
 const FIREBASE_ILLEGAL = /[\.\$#\[\]\/\x00-\x1F\x7F]/;
@@ -853,23 +867,47 @@ function initGame() {
                 return (v === null || v === undefined) ? fallback : v;
             };
 
-            if (data.collection || data.singers || data.singerHistory || data.collectLog) {
-                collection    = normalizeCollection(data.collection);
-                singers       = normalizeSingerMap(data.singers);
-                singerHistory = normalizeSingerMap(data.singerHistory);
-                collectLog    = normalizeCollectLog(data.collectLog);
-            } else {
+            // ===== 用「存檔版本號 rev」決定要採用雲端還是本機那一份 =====
+            // 之前的寫法是「雲端只要有 collection 就用雲端」，
+            // 一旦雲端寫入失敗（紅燈），雲端會停在舊的一份，
+            // 重開就會用舊的雲端資料蓋掉本機較新的紀錄 → 剛抽的卡片就消失了。
+            const cloudRev = Number(data.rev) || 0;
+            const localRev = Number(readLocal('rev', 0)) || 0;
+            const cloudHas = !!(data.collection || data.singers || data.singerHistory || data.collectLog || cloudRev);
+            const localHas = (lsRead('col') !== null) || localRev > 0;
+
+            let useLocal;
+            if (cloudHas && localHas)      useLocal = localRev > cloudRev;   // 本機比較新才用本機
+            else if (localHas && !cloudHas) useLocal = true;                 // 雲端沒東西
+            else                            useLocal = false;                // 以雲端為準
+
+            if (useLocal) {
                 collection    = normalizeCollection(readLocal('col', {}));
                 singers       = normalizeSingerMap(readLocal('sin', null));
                 singerHistory = normalizeSingerMap(readLocal('his', null));
                 collectLog    = normalizeCollectLog(readLocal('clog', null));
+                dataRev       = localRev;
+            } else {
+                collection    = normalizeCollection(data.collection);
+                singers       = normalizeSingerMap(data.singers);
+                singerHistory = normalizeSingerMap(data.singerHistory);
+                collectLog    = normalizeCollectLog(data.collectLog);
+                dataRev       = cloudRev;
             }
 
-            // 雲端有玩家資料但沒有 collectLog 時，仍嘗試從本機接回（累積紀錄不遺失）
-            if (COLLECT_KEYS.every(k => getCollectList(k).length === 0)) {
-                const localLog = normalizeCollectLog(readLocal('clog', null));
-                if (COLLECT_KEYS.some(k => localLog[k].length > 0)) collectLog = localLog;
-            }
+            // collectLog 與歷史歌手只會越來越多，兩邊直接聯集，永遠不會因為選錯來源而遺失
+            const otherLog  = normalizeCollectLog(useLocal ? data.collectLog : readLocal('clog', null));
+            COLLECT_KEYS.forEach(k => {
+                otherLog[k].forEach(v => {
+                    if (!collectHasValue(k, v)) collectLog[k].push(v);
+                });
+            });
+            const otherHist = normalizeSingerMap(useLocal ? data.singerHistory : readLocal('his', null));
+            ['m', 'f', 'g'].forEach(t => {
+                otherHist[t].forEach(n => {
+                    if (!singerHistory[t].includes(n)) singerHistory[t].push(n);
+                });
+            });
 
             // 歷史歌手清單也要包含目前擁有的歌手（舊資料修補，不會刪任何東西）
             ['m', 'f', 'g'].forEach(t => {
@@ -878,9 +916,9 @@ function initGame() {
                 });
             });
 
-            // 還原「保留中的題目」：優先讀雲端，其次讀本機（不影響任何既有資料）
-            let savedTask = data.currentTask || null;
-            if (!savedTask) savedTask = readLocal('task', null);
+            // 還原「保留中的題目」：跟著上面選到的那一份走
+            let savedTask = useLocal ? readLocal('task', null) : (data.currentTask || null);
+            if (!savedTask) savedTask = useLocal ? (data.currentTask || null) : readLocal('task', null);
             currentTask = (savedTask && savedTask.t) ? migrateTask(savedTask) : null;
 
             document.getElementById('display-name').textContent = myName;
@@ -901,6 +939,9 @@ function initGame() {
             showPage('page-home');
             syncData();
             clearLegacyLocal();   // 舊版備份已搬進「房號+暱稱」的新 key，移除避免跨房汙染
+            if (useLocal && localRev > cloudRev) {
+                showToast("已從本機備份還原較新的紀錄，正在補傳到雲端");
+            }
         });
     }).catch(e => {
         // 匿名登入失敗或讀取房間資料失敗都會進來這裡
@@ -941,9 +982,10 @@ window.addEventListener('beforeunload', () => {
 // syncData 拆成三段：畫面更新 → 本機備份 → 雲端同步
 // 這樣就算雲端寫入失敗（規則、網路、資料異常），畫面與蒐集冊也一定是正確的
 function syncData() {
+    dataRev++;          // 每次存檔都往上加，本機與雲端會寫入同一個版本號
     refreshUI();
-    saveLocal();
-    pushCloud();
+    saveLocal();        // 先寫本機（一定會成功，是最後的保命符）
+    pushCloud();        // 再寫雲端（失敗會自動重試）
 }
 
 // ===== 畫面更新（完全只依賴本機狀態，不受 Firebase 影響）=====
@@ -1039,6 +1081,8 @@ function saveLocal() {
     lsWrite('sin', singers);
     lsWrite('his', singerHistory);
     lsWrite('clog', collectLog);
+    lsWrite('rev', dataRev);
+    lsWrite('at', Date.now());
 }
 
 function pushCloud() {
@@ -1049,21 +1093,11 @@ function pushCloud() {
 
     let payload;
     try {
-        payload = cleanForFirebase({
-            name: myName,
-            completedGroups: getCompletedGroupCount(),
-            cardCount: countUniqueOwned(collection) + countDupes(collection), // 總張數（含重複，舊版相容）
-            uniqueCards: countUniqueOwned(collection),                        // 不重複張數（排行榜顯示用）
-            dupeCards: countDupes(collection),                                // 重複張數
-            collection: collection,
-            singers: singers,
-            singerHistory: singerHistory,
-            collectLog: collectLog,
-            lastActive: Date.now()
-        });
+        payload = buildPayload();
     } catch (e) {
         console.error("組裝同步資料失敗:", e);
         pendingSync = true;
+        lastSyncError = { code: 'BUILD_FAILED', message: String(e && e.message || e) };
         setSyncStatus('fail');
         return;
     }
@@ -1075,18 +1109,55 @@ function pushCloud() {
         db.ref(`rooms/${myRoom}/players/${myName}`).update(payload)
           .then(() => {
               pendingSync = false;
+              lastSyncError = null;
               setSyncStatus('ok');
           })
           .catch(e => {
               console.error("Firebase 同步失敗:", e);
+              lastSyncError = describeError(e);
               setSyncStatus('fail');
               scheduleRetry();
           });
     } catch (e) {
         console.error("Firebase 同步發生例外:", e);
+        lastSyncError = describeError(e);
         setSyncStatus('fail');
         scheduleRetry();
     }
+}
+
+// 統一組裝要上傳的資料：空的物件／陣列直接不送，避免不必要的刪除與寫入錯誤
+function buildPayload() {
+    const notEmpty = (o) => {
+        if (Array.isArray(o)) return o.length > 0;
+        return o && typeof o === 'object' && Object.keys(o).length > 0;
+    };
+    const raw = {
+        name: myName,
+        rev: dataRev,
+        completedGroups: getCompletedGroupCount(),
+        cardCount: countUniqueOwned(collection) + countDupes(collection), // 總張數（含重複，舊版相容）
+        uniqueCards: countUniqueOwned(collection),                        // 不重複張數（排行榜顯示用）
+        dupeCards: countDupes(collection),                                // 重複張數
+        lastActive: Date.now()
+    };
+    const col  = cleanForFirebase(collection);
+    const sin  = cleanForFirebase(singers);
+    const his  = cleanForFirebase(singerHistory);
+    const clog = cleanForFirebase(collectLog);
+    if (notEmpty(col))  raw.collection    = col;
+    if (notEmpty(sin))  raw.singers       = sin;
+    if (notEmpty(his))  raw.singerHistory = his;
+    if (notEmpty(clog)) raw.collectLog    = clog;
+    return raw;
+}
+
+function describeError(e) {
+    return {
+        code: (e && (e.code || e.name)) || 'UNKNOWN',
+        message: (e && e.message) || String(e),
+        at: new Date().toLocaleTimeString('zh-TW')
+    };
 }
 
 // 失敗後每 8 秒自動重試，直到成功
@@ -1109,12 +1180,44 @@ function forceSync() {
 
 function setSyncStatus(state) {
     const el = document.getElementById('sync-status');
-    if (!el) return;
-    if (!isOnline) { el.textContent = "📴 離線中，紀錄尚未上傳"; el.style.color = "#ff9800"; return; }
-    if (state === 'saving')      { el.textContent = "⏳ 同步中…";              el.style.color = "#888"; }
-    else if (state === 'ok')     { el.textContent = "☁️ 已備份到雲端";         el.style.color = "var(--group)"; }
-    else if (state === 'fail')   { el.textContent = "⚠️ 同步失敗，點此重試";   el.style.color = "#ff5252"; }
-    else                          { el.textContent = "☁️ 檢查中…";             el.style.color = "#888"; }
+    if (el) {
+        if (!isOnline) {
+            el.textContent = "📴 離線中，點此診斷";
+            el.style.color = "#ff9800";
+        } else if (state === 'saving') {
+            el.textContent = "⏳ 同步中…"; el.style.color = "#888";
+        } else if (state === 'ok') {
+            el.textContent = "☁️ 已備份到雲端"; el.style.color = "var(--group)";
+        } else if (state === 'fail') {
+            const code = lastSyncError && lastSyncError.code ? ` ${lastSyncError.code}` : "";
+            el.textContent = `⚠️ 同步失敗${code}・點此診斷`;
+            el.style.color = "#ff5252";
+        } else {
+            el.textContent = "☁️ 檢查中…"; el.style.color = "#888";
+        }
+    }
+    updateUnsavedWarn();
+}
+
+// 主畫面上的紅色警示：讓你在關掉遊戲前就知道紀錄還沒上雲端
+function updateUnsavedWarn() {
+    const box = document.getElementById('unsaved-warn');
+    if (!box) return;
+    if (!pendingSync || !cloudLoaded) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    box.innerHTML = "";
+    const l1 = document.createElement('div');
+    l1.innerHTML = "<b>⚠️ 這局的紀錄還沒上傳到雲端</b>";
+    const l2 = document.createElement('div');
+    l2.textContent = lastSyncError
+        ? `錯誤：${lastSyncError.code}。紀錄已存在這支手機上，換手機或清瀏覽器資料才會遺失。`
+        : "正在嘗試上傳。紀錄已存在這支手機上。";
+    const btn = document.createElement('button');
+    btn.className = "btn-sec";
+    btn.style.cssText = "margin-top:8px; border-color:#ff5252; color:#ff8a80;";
+    btn.textContent = "🔍 查看原因 / 立即重試";
+    btn.onclick = openDiagnostics;
+    box.append(l1, l2, btn);
 }
 
 function renderHomeSingers() {
@@ -1938,6 +2041,135 @@ function showPage(id) {
     // 進入蒐集冊或主畫面時一律重畫，保證兩邊的張數永遠一致
     if(id === 'page-book') renderCollection();
     if(id === 'page-home' && myName) refreshUI();
+}
+
+// ==================== 雲端同步診斷 ====================
+let diagText = "";
+
+function openDiagnostics() {
+    document.getElementById('diag-modal').style.display = 'block';
+    runDiagnostics();
+}
+
+function diagPrint(lines) {
+    diagText = lines.join("\n");
+    const out = document.getElementById('diag-out');
+    if (out) out.textContent = diagText;
+}
+
+function copyDiagnostics() {
+    try {
+        if (navigator.clipboard) navigator.clipboard.writeText(diagText);
+        else {
+            const ta = document.createElement('textarea');
+            ta.value = diagText; document.body.appendChild(ta);
+            ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+        }
+        showToast("已複製檢測結果");
+    } catch (e) { showToast("複製失敗，請手動選取"); }
+}
+
+async function runDiagnostics() {
+    const L = [];
+    const push = (s) => { L.push(s); diagPrint(L); };
+
+    push("=== K-Pop 蒐集戰 同步檢測 ===");
+    push(`時間：${new Date().toLocaleString('zh-TW')}`);
+    push(`暱稱：${myName || "(未登入)"}`);
+    push(`房號：${myRoom || "(未登入)"}`);
+    push(`資料路徑：rooms/${myRoom}/players/${myName}`);
+    push(`存檔版本 rev：${dataRev}`);
+    push(`連線狀態：${isOnline ? "已連線" : "離線"}`);
+    push(`本機備份：不重複 ${countUniqueOwned(collection)} 張、重複 ${countDupes(collection)} 張`);
+    push("");
+
+    // 1) 登入狀態
+    const u = firebase.auth().currentUser;
+    push(u ? `1) 匿名登入：OK（uid ${String(u.uid).slice(0, 8)}…）`
+           : "1) 匿名登入：❌ 沒有登入使用者 → 請到 Firebase 主控台 Authentication 啟用「匿名」");
+
+    if (!myName || !myRoom) { push("\n尚未登入房間，請先回登入頁輸入暱稱與房號。"); return; }
+
+    // 2) 讀自己的資料
+    try {
+        const snap = await db.ref(`rooms/${myRoom}/players/${myName}`).once('value');
+        const v = snap.val();
+        push(`2) 讀取自己的存檔：OK（雲端 rev=${(v && v.rev) || 0}、不重複 ${countUniqueOwned((v && v.collection) || {})} 張）`);
+    } catch (e) {
+        const d = describeError(e);
+        push(`2) 讀取自己的存檔：❌ ${d.code} - ${d.message}`);
+    }
+
+    // 3) 讀房間排行
+    try {
+        await db.ref(`rooms/${myRoom}/players`).once('value');
+        push("3) 讀取房間玩家列表：OK");
+    } catch (e) {
+        const d = describeError(e);
+        push(`3) 讀取房間玩家列表：❌ ${d.code} - ${d.message}`);
+        push("   → 規則把讀取權限設在 $player 層，排行榜會看不到別人。讀取權限要設在 rooms 或 players 層。");
+    }
+
+    // 4) 最小寫入測試（只寫一個時間戳）
+    let minOk = false;
+    try {
+        await db.ref(`rooms/${myRoom}/players/${myName}`).update({ lastActive: Date.now() });
+        minOk = true;
+        push("4) 最小寫入測試（1 個欄位）：OK");
+    } catch (e) {
+        const d = describeError(e);
+        push(`4) 最小寫入測試（1 個欄位）：❌ ${d.code} - ${d.message}`);
+    }
+
+    // 5) 完整寫入測試
+    let fullOk = false;
+    try {
+        await db.ref(`rooms/${myRoom}/players/${myName}`).update(buildPayload());
+        fullOk = true;
+        pendingSync = false;
+        lastSyncError = null;
+        setSyncStatus('ok');
+        push("5) 完整存檔寫入測試：OK");
+    } catch (e) {
+        const d = describeError(e);
+        lastSyncError = d;
+        setSyncStatus('fail');
+        push(`5) 完整存檔寫入測試：❌ ${d.code} - ${d.message}`);
+    }
+
+    push("");
+    push("=== 判讀 ===");
+    if (fullOk) {
+        push("✅ 一切正常，紀錄已成功寫入雲端。");
+        push("（如果剛才是紅燈，現在已經補傳成功了）");
+    } else if (!minOk) {
+        push("❌ 連 1 個欄位都寫不進去 → 是「資料庫規則」不允許寫入。");
+        push("");
+        push("請到 Firebase 主控台 → Realtime Database → 規則，");
+        push("貼上以下內容後按「發布」：");
+        push("");
+        push('{');
+        push('  "rules": {');
+        push('    "rooms": {');
+        push('      "$room": {');
+        push('        ".read": "auth != null",');
+        push('        ".write": "auth != null"');
+        push('      }');
+        push('    }');
+        push('  }');
+        push('}');
+        push("");
+        push("另外請確認 Authentication → 登入方式 → 「匿名」已啟用。");
+        push("提醒：測試模式的規則有 30 天期限，過期後就會變成全部拒絕。");
+    } else {
+        push("⚠️ 單一欄位寫得進去，但完整存檔寫不進去 →");
+        push("通常是規則裡有 .validate 限制，或某個資料值不被接受。");
+        push("請把上面的錯誤訊息回報給我。");
+    }
+    if (lastSyncError) {
+        push("");
+        push(`最近一次同步錯誤：${lastSyncError.code} - ${lastSyncError.message}`);
+    }
 }
 
 function closeDrawModal() {

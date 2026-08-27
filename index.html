@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>K-Pop 蒐集戰 V73</title>
+    <title>K-Pop 蒐集戰 V74</title>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-auth-compat.js"></script>
@@ -290,7 +290,7 @@
 </div>
 
 <div id="page-login" class="page active">
-    <h1 style="color:var(--accent);">K-Pop 蒐集戰 V73</h1>
+    <h1 style="color:var(--accent);">K-Pop 蒐集戰 V74</h1>
     <p style="color:#888; font-size:12px;">主畫面即時統計 • 累積型題目 • 自動歌手分類</p>
     <input type="text" id="inName" placeholder="你的暱稱" style="width:80%; padding:15px; background:#222; border:1px solid #444; color:white; border-radius:8px; margin-bottom:10px;">
     <input type="text" id="inRoom" placeholder="房間號碼" style="width:80%; padding:15px; background:#222; border:1px solid #444; color:white; border-radius:8px; margin-bottom:20px;">
@@ -669,6 +669,8 @@ let isOnline = true;       // Firebase 連線狀態
 let syncTimer = null;      // 失敗後的自動重試計時器
 let dataRev = 0;           // 存檔版本號：每次存檔 +1，用來判斷雲端／本機哪一份比較新
 let lastSyncError = null;  // 最近一次同步錯誤（顯示在診斷畫面）
+let legacyMode = false;         // 規則不接受新欄位，只能存舊欄位（部分備份）
+let legacyOnlyAttempt = false;  // 正在嘗試退階寫入，避免無限迴圈
 
 // Firebase key 不允許 . # $ [ ] / 與控制字元，統一由此過濾
 const FIREBASE_ILLEGAL = /[\.\$#\[\]\/\x00-\x1F\x7F]/;
@@ -1110,11 +1112,32 @@ function pushCloud() {
           .then(() => {
               pendingSync = false;
               lastSyncError = null;
+              legacyMode = false;
               setSyncStatus('ok');
           })
           .catch(e => {
+              const d = describeError(e);
               console.error("Firebase 同步失敗:", e);
-              lastSyncError = describeError(e);
+              // 規則不接受新欄位時，退一步只送舊欄位，至少把卡片保住
+              if (d.code === 'PERMISSION_DENIED' && !legacyOnlyAttempt) {
+                  legacyOnlyAttempt = true;
+                  db.ref(`rooms/${myRoom}/players/${myName}`).update(buildPayload(true))
+                    .then(() => {
+                        legacyOnlyAttempt = false;
+                        legacyMode = true;      // 已成功，但少了 rev / collectLog 等欄位
+                        pendingSync = false;
+                        lastSyncError = d;
+                        setSyncStatus('partial');
+                    })
+                    .catch(e2 => {
+                        legacyOnlyAttempt = false;
+                        lastSyncError = describeError(e2);
+                        setSyncStatus('fail');
+                        scheduleRetry();
+                    });
+                  return;
+              }
+              lastSyncError = d;
               setSyncStatus('fail');
               scheduleRetry();
           });
@@ -1127,7 +1150,9 @@ function pushCloud() {
 }
 
 // 統一組裝要上傳的資料：空的物件／陣列直接不送，避免不必要的刪除與寫入錯誤
-function buildPayload() {
+// legacyOnly = true 時只送「舊規則一定允許」的欄位，
+// 讓還沒更新 Firebase 規則的人也能把卡片存上雲端。
+function buildPayload(legacyOnly) {
     const notEmpty = (o) => {
         if (Array.isArray(o)) return o.length > 0;
         return o && typeof o === 'object' && Object.keys(o).length > 0;
@@ -1149,6 +1174,15 @@ function buildPayload() {
     if (notEmpty(sin))  raw.singers       = sin;
     if (notEmpty(his))  raw.singerHistory = his;
     if (notEmpty(clog)) raw.collectLog    = clog;
+
+    if (legacyOnly) {
+        // 舊規則（$other: false）只認得這幾個欄位，其他一律拒絕
+        const allowed = ['name', 'completedGroups', 'cardCount', 'lastActive',
+                         'collection', 'singers', 'singerHistory'];
+        const out = {};
+        allowed.forEach(k => { if (raw[k] !== undefined) out[k] = raw[k]; });
+        return out;
+    }
     return raw;
 }
 
@@ -1188,6 +1222,9 @@ function setSyncStatus(state) {
             el.textContent = "⏳ 同步中…"; el.style.color = "#888";
         } else if (state === 'ok') {
             el.textContent = "☁️ 已備份到雲端"; el.style.color = "var(--group)";
+        } else if (state === 'partial') {
+            el.textContent = "☁️ 已備份（部分欄位）・點此";
+            el.style.color = "#ffb74d";
         } else if (state === 'fail') {
             const code = lastSyncError && lastSyncError.code ? ` ${lastSyncError.code}` : "";
             el.textContent = `⚠️ 同步失敗${code}・點此診斷`;
@@ -1203,15 +1240,24 @@ function setSyncStatus(state) {
 function updateUnsavedWarn() {
     const box = document.getElementById('unsaved-warn');
     if (!box) return;
-    if (!pendingSync || !cloudLoaded) { box.style.display = 'none'; return; }
+    if (!cloudLoaded || (!pendingSync && !legacyMode)) { box.style.display = 'none'; return; }
     box.style.display = 'block';
     box.innerHTML = "";
     const l1 = document.createElement('div');
-    l1.innerHTML = "<b>⚠️ 這局的紀錄還沒上傳到雲端</b>";
     const l2 = document.createElement('div');
-    l2.textContent = lastSyncError
-        ? `錯誤：${lastSyncError.code}。紀錄已存在這支手機上，換手機或清瀏覽器資料才會遺失。`
-        : "正在嘗試上傳。紀錄已存在這支手機上。";
+    if (!pendingSync && legacyMode) {
+        box.style.borderColor = "#ffb74d";
+        box.style.color = "#ffcc80";
+        l1.innerHTML = "<b>⚠️ 卡片已上傳，但資料庫規則不接受新欄位</b>";
+        l2.textContent = "「歌名要有數字／動物…」的累積紀錄目前只存在這支手機上。請照診斷畫面更新 Firebase 規則。";
+    } else {
+        box.style.borderColor = "#ff5252";
+        box.style.color = "#ff8a80";
+        l1.innerHTML = "<b>⚠️ 這局的紀錄還沒上傳到雲端</b>";
+        l2.textContent = lastSyncError
+            ? `錯誤：${lastSyncError.code}。紀錄已存在這支手機上，換手機或清瀏覽器資料才會遺失。`
+            : "正在嘗試上傳。紀錄已存在這支手機上。";
+    }
     const btn = document.createElement('button');
     btn.className = "btn-sec";
     btn.style.cssText = "margin-top:8px; border-color:#ff5252; color:#ff8a80;";
@@ -1403,7 +1449,8 @@ function persistTask() {
     if(myName && myRoom && cloudLoaded) {
         try {
             db.ref(`rooms/${myRoom}/players/${myName}`)
-              .update({ currentTask: currentTask ? cleanForFirebase(currentTask) : null })
+              // 一律附上 name：規則常見的 newData.hasChildren(['name']) 驗證需要它
+              .update({ name: myName, currentTask: currentTask ? cleanForFirebase(currentTask) : null })
               .catch(e => console.error("題目同步失敗:", e));
         } catch(e) { console.error("題目同步例外（本機仍已保存）:", e); }
     }
@@ -2110,31 +2157,78 @@ async function runDiagnostics() {
         push("   → 規則把讀取權限設在 $player 層，排行榜會看不到別人。讀取權限要設在 rooms 或 players 層。");
     }
 
-    // 4) 最小寫入測試（只寫一個時間戳）
+    const pRef = db.ref(`rooms/${myRoom}/players/${myName}`);
+
+    // 4) 最小寫入測試（一定附上 name，因為規則常要求 hasChildren(['name'])）
     let minOk = false;
     try {
-        await db.ref(`rooms/${myRoom}/players/${myName}`).update({ lastActive: Date.now() });
+        await pRef.update({ name: myName, lastActive: Date.now() });
         minOk = true;
-        push("4) 最小寫入測試（1 個欄位）：OK");
+        push("4) 最小寫入測試（name + lastActive）：OK");
     } catch (e) {
         const d = describeError(e);
-        push(`4) 最小寫入測試（1 個欄位）：❌ ${d.code} - ${d.message}`);
+        push(`4) 最小寫入測試（name + lastActive）：❌ ${d.code} - ${d.message}`);
+    }
+
+    // 4b) 逐一測試每個欄位，找出規則到底拒絕哪一個
+    const rejected = [];
+    if (minOk) {
+        push("");
+        push("4b) 逐一測試各欄位（找出規則拒絕哪一個）：");
+        const probes = [
+            ['rev',             dataRev],
+            ['completedGroups', getCompletedGroupCount()],
+            ['cardCount',       countUniqueOwned(collection) + countDupes(collection)],
+            ['uniqueCards',     countUniqueOwned(collection)],
+            ['dupeCards',       countDupes(collection)],
+            ['collection',      cleanForFirebase(collection)],
+            ['singers',         cleanForFirebase(singers)],
+            ['singerHistory',   cleanForFirebase(singerHistory)],
+            ['collectLog',      cleanForFirebase(collectLog)],
+            ['currentTask',     currentTask ? cleanForFirebase(currentTask) : null]
+        ];
+        for (const [k, v] of probes) {
+            const empty = (v === null) ||
+                (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0) ||
+                (Array.isArray(v) && v.length === 0);
+            if (empty) { push(`   ${k}：（目前沒有資料，略過）`); continue; }
+            try {
+                await pRef.update({ name: myName, [k]: v });
+                push(`   ${k}：OK`);
+            } catch (e) {
+                rejected.push(k);
+                push(`   ${k}：❌ ${describeError(e).code}`);
+            }
+        }
     }
 
     // 5) 完整寫入測試
+    push("");
     let fullOk = false;
     try {
-        await db.ref(`rooms/${myRoom}/players/${myName}`).update(buildPayload());
+        await pRef.update(buildPayload());
         fullOk = true;
         pendingSync = false;
         lastSyncError = null;
+        legacyMode = false;
         setSyncStatus('ok');
         push("5) 完整存檔寫入測試：OK");
     } catch (e) {
         const d = describeError(e);
         lastSyncError = d;
-        setSyncStatus('fail');
         push(`5) 完整存檔寫入測試：❌ ${d.code} - ${d.message}`);
+
+        // 6) 退階測試：只送舊欄位（卡片本身）
+        try {
+            await pRef.update(buildPayload(true));
+            legacyMode = true;
+            pendingSync = false;
+            setSyncStatus('partial');
+            push("6) 退階寫入測試（只送舊欄位）：OK → 卡片本身有存上雲端");
+        } catch (e2) {
+            setSyncStatus('fail');
+            push(`6) 退階寫入測試（只送舊欄位）：❌ ${describeError(e2).code}`);
+        }
     }
 
     push("");
@@ -2143,34 +2237,62 @@ async function runDiagnostics() {
         push("✅ 一切正常，紀錄已成功寫入雲端。");
         push("（如果剛才是紅燈，現在已經補傳成功了）");
     } else if (!minOk) {
-        push("❌ 連 1 個欄位都寫不進去 → 是「資料庫規則」不允許寫入。");
+        push("❌ 連 name + lastActive 都寫不進去 → 規則完全不允許寫入。");
+        push("   請確認 Authentication → 登入方式 → 「匿名」已啟用，");
+        push("   並確認規則的 .write 有設在 players/$player 或更上層。");
+        push("   （測試模式的規則有 30 天期限，過期後會全部拒絕）");
+        push("");
+        push(RULES_JSON);
+    } else {
+        push("⚠️ 部分欄位被規則拒絕。");
+        if (rejected.length) {
+            push(`   被拒絕的欄位：${rejected.join('、')}`);
+            push("   原因：規則裡的 \"$other\": { \".validate\": false } 會拒絕所有沒列出來的欄位，");
+            push("   而這些新欄位（rev / uniqueCards / dupeCards / collectLog / currentTask）不在名單裡。");
+        }
         push("");
         push("請到 Firebase 主控台 → Realtime Database → 規則，");
-        push("貼上以下內容後按「發布」：");
+        push("整段換成下面這份後按「發布」：");
         push("");
-        push('{');
-        push('  "rules": {');
-        push('    "rooms": {');
-        push('      "$room": {');
-        push('        ".read": "auth != null",');
-        push('        ".write": "auth != null"');
-        push('      }');
-        push('    }');
-        push('  }');
-        push('}');
-        push("");
-        push("另外請確認 Authentication → 登入方式 → 「匿名」已啟用。");
-        push("提醒：測試模式的規則有 30 天期限，過期後就會變成全部拒絕。");
-    } else {
-        push("⚠️ 單一欄位寫得進去，但完整存檔寫不進去 →");
-        push("通常是規則裡有 .validate 限制，或某個資料值不被接受。");
-        push("請把上面的錯誤訊息回報給我。");
+        push(RULES_JSON);
     }
     if (lastSyncError) {
         push("");
         push(`最近一次同步錯誤：${lastSyncError.code} - ${lastSyncError.message}`);
     }
 }
+
+// 這份規則已經把本版用到的所有欄位列進白名單
+const RULES_JSON = [
+'{',
+'  "rules": {',
+'    "rooms": {',
+'      "$room": {',
+'        ".read": "auth != null",',
+'        "players": {',
+'          "$player": {',
+'            ".write": "auth != null",',
+'            ".validate": "newData.hasChildren([\'name\'])",',
+'            "name":            { ".validate": "newData.isString() && newData.val().length <= 50" },',
+'            "rev":             { ".validate": "newData.isNumber()" },',
+'            "completedGroups": { ".validate": "newData.isNumber()" },',
+'            "cardCount":       { ".validate": "newData.isNumber()" },',
+'            "uniqueCards":     { ".validate": "newData.isNumber()" },',
+'            "dupeCards":       { ".validate": "newData.isNumber()" },',
+'            "lastActive":      { ".validate": "newData.isNumber()" },',
+'            "collection":      { ".validate": true },',
+'            "singers":         { ".validate": true },',
+'            "singerHistory":   { ".validate": true },',
+'            "collectLog":      { ".validate": true },',
+'            "currentTask":     { ".validate": true },',
+'            "$other":          { ".validate": false }',
+'          }',
+'        }',
+'      }',
+'    }',
+'  }',
+'}'
+].join("\n");
 
 function closeDrawModal() {
     document.getElementById('draw-modal').style.display = 'none';

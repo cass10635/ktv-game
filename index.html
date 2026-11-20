@@ -1037,7 +1037,10 @@ function refreshUI() {
     renderHomeSingers();
     updateResumeBtn();
     renderRanking();   // 讓自己的名字與張數立刻出現，不必等雲端回傳
-    renderCollection();
+    // 蒐集冊有 256 張圖，只在蒐集冊開著時才重畫；打開時 showPage('page-book') 會重畫
+    // （以前每次更新都重畫，一登入就把全部圖片下載下來）
+    const bookPage = document.getElementById('page-book');
+    if (bookPage && bookPage.classList.contains('active')) renderCollection();
 }
 
 // ===== 本機備份 key =====
@@ -1787,6 +1790,15 @@ function getCardImage(group, member) {
     const safeMember = member.replace(/ /g, '_');
     return `./images/${safeGroup}_${safeMember}.jpg`;
 }
+// 蒐集冊格子用的小圖（120x120，用 tools/make-thumbs.sh 產生）
+function getCardThumb(group, member) {
+    return getCardImage(group, member).replace('./images/', './images/thumbs/');
+}
+// 小圖載不到（例如新成員忘了產生小圖）就改用原圖，原圖也沒有才顯示文字
+window.handleThumbError = function(img, group, member) {
+    img.onerror = function() { handleImgError(this, member); };
+    img.src = getCardImage(group, member);
+};
 
 window.handleImgError = function(img, member) {
     img.onerror = null; 
@@ -1953,10 +1965,11 @@ function renderCollection() {
 
             const img = document.createElement('img');
             img.className = "card-thumb";
-            img.src = getCardImage(g, m);
+            img.loading = "lazy";   // 捲到畫面上才下載
+            img.onerror = function() { handleThumbError(this, g, m); };
+            img.src = getCardThumb(g, m);
             img.style.opacity = num ? 1 : 0.3;
             img.style.marginBottom = "5px";
-            img.onerror = function() { handleImgError(this, m); };
 
             const nameDiv = document.createElement('div');
             nameDiv.className = "member-name";
